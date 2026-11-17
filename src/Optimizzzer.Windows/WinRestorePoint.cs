@@ -17,8 +17,9 @@ namespace Optimizzzer.Windows
         private const string FrequencyValue = "SystemRestorePointCreationFrequency";
         private const int BeginSystemChange = 100, EndSystemChange = 101, ModifySettings = 12;
         private readonly IRegistry _reg;
+        private readonly IProcessRunner _proc;
 
-        public WinRestorePoint(IRegistry reg) { _reg = reg; }
+        public WinRestorePoint(IRegistry reg, IProcessRunner proc) { _reg = reg; _proc = proc; }
 
         [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode, Pack = 1)] // srrestoreptapi.h uses #pragma pack(1)
         private struct RESTOREPOINTINFOW
@@ -52,16 +53,20 @@ namespace Optimizzzer.Windows
                 _reg.SetValue(Hive.LocalMachine, FrequencyKey, FrequencyValue, RegValue.DWord(0));
                 if (!EnableProtection(drive, out var enableError)) return enableError;
 
+                // 1) Checkpoint-Computer: Microsoft's own cmdlet, present in Windows PowerShell 5.1 on every Windows 10/11.
+                var psError = CheckpointComputer(description);
+                if (LastSequence(out _) > lastBefore) return null;
+
+                // 2) Fallback: SRSetRestorePoint with a matching begin/end pair.
                 var begin = new RESTOREPOINTINFOW { dwEventType = BeginSystemChange, dwRestorePtType = ModifySettings, szDescription = description };
                 if (!SRSetRestorePointW(ref begin, out var status))
-                    return "SRSetRestorePoint failed with status " + status.nStatus + Hint(status.nStatus);
+                    return "Checkpoint-Computer: " + psError + " / SRSetRestorePoint status " + status.nStatus + Hint(status.nStatus);
                 var end = new RESTOREPOINTINFOW { dwEventType = EndSystemChange, dwRestorePtType = ModifySettings, llSequenceNumber = status.llSequenceNumber, szDescription = description };
-                if (!SRSetRestorePointW(ref end, out var endStatus))
-                    return "SRSetRestorePoint (end) failed with status " + endStatus.nStatus + Hint(endStatus.nStatus);
+                SRSetRestorePointW(ref end, out _);
 
                 if (LastSequence(out var listed) > lastBefore) return null;
-                return "Windows accepted the request but did not create the restore point (sequence " + status.llSequenceNumber
-                    + ", listed: " + listed + "). System Protection may be limited by policy or disk space.";
+                return "Windows did not create the restore point (Checkpoint-Computer: " + (psError ?? "no error") + "; listed: " + listed
+                    + "). System Protection may be turned off by policy or there may not be enough disk space.";
             }
             catch (DllNotFoundException)
             {
@@ -80,6 +85,16 @@ namespace Optimizzzer.Windows
                 }
                 catch (Exception) { }
             }
+        }
+
+        private string CheckpointComputer(string description)
+        {
+            var script = "$ErrorActionPreference='Stop';$ProgressPreference='SilentlyContinue';" +
+                         "Checkpoint-Computer -Description '" + description.Replace("'", "''") + "' -RestorePointType MODIFY_SETTINGS";
+            var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(script));
+            var path = Path.Combine(Environment.SystemDirectory, @"WindowsPowerShell\v1.0\powershell.exe");
+            var r = _proc.Run(path, "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + encoded, 300000);
+            return r.Ok ? null : (r.Error.Length > 0 ? r.Error : r.Output).Trim();
         }
 
         /// <summary>Turns System Protection on for the system drive when it is off (the Windows default on many PCs).</summary>

@@ -30,22 +30,6 @@ jobs:
       - name: Build Optimizzzer.exe
         run: dotnet build src/Optimizzzer.App -c Release
 
-      - name: System Restore diagnostics (reference, using Microsoft's own cmdlet)
-        if: matrix.os == 'windows-11-arm'
-        continue-on-error: true
-        shell: powershell
-        run: |
-          Get-Service VSS, swprv, srservice -ErrorAction SilentlyContinue | Format-Table Name, Status, StartType | Out-String | Write-Host
-          Get-ItemProperty 'HKLM:\SOFTWARE\Policies\Microsoft\Windows NT\SystemRestore' -ErrorAction SilentlyContinue | Out-String | Write-Host
-          vssadmin list shadowstorage | Out-String | Write-Host
-          Enable-ComputerRestore -Drive "$env:SystemDrive\"
-          Set-ItemProperty 'HKLM:\SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore' SystemRestorePointCreationFrequency 0 -Type DWord
-          try { Checkpoint-Computer -Description 'Reference point' -RestorePointType MODIFY_SETTINGS -ErrorAction Stop; Write-Host 'Checkpoint-Computer returned OK' } catch { Write-Host "Checkpoint-Computer error: $_" }
-          $points = @(Get-ComputerRestorePoint -ErrorAction SilentlyContinue)
-          Write-Host "Restore points listed by Windows: $($points.Count)"
-          $points | Format-Table SequenceNumber, Description, CreationTime | Out-String | Write-Host
-          Get-WinEvent -LogName Application -MaxEvents 30 -ErrorAction SilentlyContinue | Where-Object { $_.ProviderName -match 'SystemRestore|VSS' } | Format-List TimeCreated, ProviderName, Id, Message | Out-String -Width 300 | Write-Host
-
       - name: Self-test (every screen, screenshots, wizard apply and undo, every tool)
         timeout-minutes: 12
         shell: pwsh

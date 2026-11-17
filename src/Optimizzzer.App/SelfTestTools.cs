@@ -40,7 +40,7 @@ namespace Optimizzzer.App
             {
                 const string key = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore";
                 var before = win.Registry.GetValue(Hive.LocalMachine, key, "SystemRestorePointCreationFrequency");
-                var err = new WinRestorePoint(win.Registry).Create("Optimizzzer self-test");
+                var err = new WinRestorePoint(win.Registry, win.Process).Create("Optimizzzer self-test");
                 var isServer = (state.Ctx.Info.ProductName ?? "").IndexOf("Server", StringComparison.OrdinalIgnoreCase) >= 0;
                 log(state.Ctx.Info.ProductName + ": " + (err == null ? "restore point created" : "restore point not created: " + err));
                 // Windows Server has no System Restore; on Windows 10/11 it must work.
