@@ -2,6 +2,15 @@
 
 Optimizador para Windows 10 y 11. Es un único `Optimizzzer.exe` de unos 500 KB que no instala nada: funciona con .NET Framework 4.8, que ya viene con Windows 10 (1903 o posterior) y con Windows 11.
 
+![Asistente: análisis](docs/screenshots/Light-Es-page-wizard.png)
+
+| Selección por categorías | Revisión antes de aplicar |
+|---|---|
+| ![Selección](docs/screenshots/Light-Es-wizard-step-Select.png) | ![Revisión](docs/screenshots/Light-Es-wizard-step-Review.png) |
+| ![Tema oscuro](docs/screenshots/Dark-En-wizard-step-Select.png) | ![Limpieza](docs/screenshots/Light-Es-page-cleanup.png) |
+
+Las capturas se generan solas en un Windows de GitHub.
+
 ## Qué hace
 
 **Asistente paso a paso**
@@ -73,6 +82,10 @@ Si ejecutas la app con una cuenta de administrador distinta a la tuya, los ajust
 ## Datos que guarda
 
 Todo queda en `C:\ProgramData\Optimizzzer`: el diario para deshacer, las mediciones, la copia de seguridad del DNS y los ajustes de idioma y tema. Borrar la carpeta no deshace nada, solo olvida el historial.
+
+## Licencia
+
+MIT, ver [LICENSE](LICENSE).
 
 ## Créditos
 

@@ -61,6 +61,7 @@ namespace Optimizzzer.App.Shell
             var g = new Grid();
             g.ColumnDefinitions.Add(new ColumnDefinition());
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            if (left is FrameworkElement lf) lf.HorizontalAlignment = HorizontalAlignment.Left;
             if (left != null) g.Children.Add(left);
             if (right != null) { Grid.SetColumn(right, 1); g.Children.Add(right); }
             return g;
