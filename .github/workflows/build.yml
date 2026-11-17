@@ -44,6 +44,33 @@ jobs:
           if (-not $done) { Stop-Process -Id $p.Id -Force; throw 'Dry run did not finish' }
           if ($p.ExitCode -ne 0) { throw "Dry run failed with exit code $($p.ExitCode)" }
 
+      - name: Apply and undo on a real Windows (disposable runner)
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe).Path
+          function Invoke-Opt([string[]]$a, [string]$out) {
+            $p = Start-Process -FilePath $exe -ArgumentList $a -PassThru -RedirectStandardOutput $out
+            if (-not $p.WaitForExit(300000)) { Stop-Process -Id $p.Id -Force; throw "timeout: $a" }
+            return $p.ExitCode
+          }
+          $ids = 'privacy.telemetry,privacy.diagtrack,privacy.telemetryTasks,privacy.webSearch,perf.menuDelay,gaming.windowedOptimizations,gaming.gameDvr,power.fastStartup,update.stayOnVersion,svc.fax,ui.homeGallery,ui.fileExtensions,network.llmnr'
+          Invoke-Opt @('-Scan','-Lang','en') before.txt | Out-Null
+          $code = Invoke-Opt @('-Apply',$ids,'-Silent','-NoRestorePoint','-Lang','en') apply.txt
+          Get-Content apply.txt
+          if ($code -ne 0) { throw "apply exit code $code" }
+          Invoke-Opt @('-Scan','-Lang','en') applied.txt | Out-Null
+          $wanted = $ids.Split(',')
+          $notApplied = Get-Content applied.txt | Where-Object { $parts = -split $_; $parts.Count -ge 2 -and $wanted -contains $parts[1] -and $parts[0] -ne 'Applied' -and $parts[0] -ne 'NotApplicable' }
+          if ($notApplied) { $notApplied; throw 'Some tweaks did not report Applied after applying' }
+          $code = Invoke-Opt @('-Undo','all','-Lang','en') undo.txt
+          Get-Content undo.txt
+          if ($code -ne 0) { throw "undo exit code $code" }
+          Invoke-Opt @('-Scan','-Lang','en') after.txt | Out-Null
+          $diff = Compare-Object (Get-Content before.txt) (Get-Content after.txt)
+          if ($diff) { $diff | Format-Table -AutoSize | Out-String -Width 300; throw 'State after undo differs from the original' }
+          Write-Host "Apply and undo round trip OK for: $ids"
+
       - uses: actions/upload-artifact@v4
         with:
           name: Optimizzzer
