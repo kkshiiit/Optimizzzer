@@ -116,3 +116,26 @@ jobs:
             git commit -m "Update README screenshots [skip ci]"
             git push origin HEAD:${{ github.ref_name }}
           }
+
+  # Pushing a tag like v1.0.0 publishes Optimizzzer.exe as a GitHub Release, after every test above passed.
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build Optimizzzer.exe
+        run: dotnet build src/Optimizzzer.App -c Release
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Copy-Item src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe Optimizzzer.exe
+          $hash = (Get-FileHash Optimizzzer.exe -Algorithm SHA256).Hash
+          $notes = (Get-Content docs/RELEASE_NOTES.md -Raw) + "`n`nSHA-256 de Optimizzzer.exe: ``$hash``"
+          Set-Content notes.md $notes
+          gh release create "${{ github.ref_name }}" Optimizzzer.exe --title "Optimizzzer ${{ github.ref_name }}" --notes-file notes.md
