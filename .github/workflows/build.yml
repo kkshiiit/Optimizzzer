@@ -10,7 +10,13 @@ permissions:
 
 jobs:
   windows:
-    runs-on: windows-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # windows-latest: Windows Server (same base as Windows 11 24H2).
+        # windows-11-arm: a real Windows 11 client, where System Restore exists.
+        os: [windows-latest, windows-11-arm]
+    runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
 
@@ -55,6 +61,7 @@ jobs:
         shell: pwsh
         run: |
           $exe = (Resolve-Path src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe).Path
+          (Get-CimInstance Win32_OperatingSystem) | Select-Object Caption, Version, OSArchitecture | Format-List | Out-String | Write-Host
           function Invoke-Opt([string[]]$a, [string]$out) {
             $p = Start-Process -FilePath $exe -ArgumentList $a -PassThru -RedirectStandardOutput $out
             if (-not $p.WaitForExit(300000)) { Stop-Process -Id $p.Id -Force; throw "timeout: $a" }
@@ -78,6 +85,7 @@ jobs:
           Write-Host "Apply and undo round trip OK for: $ids"
 
       - uses: actions/upload-artifact@v4
+        if: matrix.os == 'windows-latest'
         with:
           name: Optimizzzer
           path: src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe
@@ -85,12 +93,12 @@ jobs:
       - uses: actions/upload-artifact@v4
         if: always()
         with:
-          name: Screenshots
+          name: Screenshots-${{ matrix.os }}
           path: screenshots
 
       # Run manually (workflow_dispatch) to refresh the screenshots shown in the README.
       - name: Commit README screenshots
-        if: github.event_name == 'workflow_dispatch' && success()
+        if: github.event_name == 'workflow_dispatch' && success() && matrix.os == 'windows-latest'
         shell: pwsh
         run: |
           New-Item -ItemType Directory -Force docs/screenshots | Out-Null
