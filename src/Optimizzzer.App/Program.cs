@@ -36,6 +36,7 @@ namespace Optimizzzer.App
             AppDomain.CurrentDomain.UnhandledException += (_, e) => CrashLog(e.ExceptionObject as Exception ?? new Exception(Convert.ToString(e.ExceptionObject)));
             System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, e) => { CrashLog(e.Exception); e.SetObserved(); };
             var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
+            InstallUiContext();
             app.DispatcherUnhandledException += (_, e) =>
             {
                 var path = CrashLog(e.Exception);
@@ -50,6 +51,13 @@ namespace Optimizzzer.App
             var window = new MainWindow(state);
             return app.Run(window);
         }
+
+        /// <summary>
+        /// WPF only installs its synchronization context once the dispatcher runs. The main window starts loading
+        /// in its constructor, before that, so install it now: every await and Progress then returns to the UI thread.
+        /// </summary>
+        private static void InstallUiContext() =>
+            SynchronizationContext.SetSynchronizationContext(new DispatcherSynchronizationContext(Dispatcher.CurrentDispatcher));
 
         private static string CrashLog(Exception ex)
         {
@@ -98,11 +106,27 @@ namespace Optimizzzer.App
             watchdog.Start();
 
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
+            InstallUiContext();
             Check("styles parse", () => Theme.LoadStyles(app.Resources));
             AppState state = null;
             Check("app state", () => state = new AppState());
             Check("catalog", () => { if (TweakCatalog.All.Count < 100) throw new Exception("catalog too small: " + TweakCatalog.All.Count); });
             Check("system context", () => state.EnsureReadyAsync().GetAwaiter().GetResult());
+            Check("first launch scan through the UI", () =>
+            {
+                var fresh = new AppState();
+                Theme.Apply(ThemeChoice.System);
+                var w = new MainWindow(fresh) { ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
+                w.Show();
+                var until = DateTime.Now.AddSeconds(120);
+                while (fresh.ScanResults == null && DateTime.Now < until) Pump();
+                if (fresh.ScanResults == null) throw new Exception("the wizard scan did not finish");
+                Pump();
+                w.UpdateLayout();
+                if (w.CurrentView == null || w.CurrentView.ActualHeight <= 0) throw new Exception("scan result view has no size");
+                log.AppendLine("  wizard scanned " + fresh.ScanResults.Count + " tweaks");
+                w.Close();
+            });
             Check("read-only scan", () =>
             {
                 state.ScanResults = state.Engine.Scan(TweakCatalog.All);
