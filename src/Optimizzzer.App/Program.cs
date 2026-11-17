@@ -33,6 +33,8 @@ namespace Optimizzzer.App
                 return 1;
             }
 
+            AppDomain.CurrentDomain.UnhandledException += (_, e) => CrashLog(e.ExceptionObject as Exception ?? new Exception(Convert.ToString(e.ExceptionObject)));
+            System.Threading.Tasks.TaskScheduler.UnobservedTaskException += (_, e) => { CrashLog(e.Exception); e.SetObserved(); };
             var app = new Application { ShutdownMode = ShutdownMode.OnMainWindowClose };
             app.DispatcherUnhandledException += (_, e) =>
             {
@@ -81,6 +83,11 @@ namespace Optimizzzer.App
                 Flush();
             }
             // CI must never hang: if something blocks, record it and exit with a distinct code.
+            AppDomain.CurrentDomain.UnhandledException += (_, e) =>
+            {
+                lock (log) log.AppendLine("UNHANDLED " + e.ExceptionObject);
+                Flush();
+            };
             var watchdog = new Thread(() =>
             {
                 Thread.Sleep(TimeSpan.FromMinutes(5));
