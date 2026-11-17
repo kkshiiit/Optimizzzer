@@ -41,7 +41,19 @@ namespace Optimizzzer.App
                 const string key = @"SOFTWARE\Microsoft\Windows NT\CurrentVersion\SystemRestore";
                 var before = win.Registry.GetValue(Hive.LocalMachine, key, "SystemRestorePointCreationFrequency");
                 var err = new WinRestorePoint(win.Registry).Create("Optimizzzer self-test");
-                log(err == null ? "restore point created" : "restore point not available here (expected on Windows Server): " + err);
+                var isServer = (state.Ctx.Info.ProductName ?? "").IndexOf("Server", StringComparison.OrdinalIgnoreCase) >= 0;
+                log(state.Ctx.Info.ProductName + ": " + (err == null ? "restore point created" : "restore point not created: " + err));
+                // Windows Server has no System Restore; on Windows 10/11 it must work.
+                if (err != null && !isServer) throw new Exception("restore point failed on a client Windows: " + err);
+                if (err == null)
+                {
+                    var points = 0;
+                    using (var searcher = new System.Management.ManagementObjectSearcher(@"root\default", "SELECT Description FROM SystemRestore"))
+                        foreach (System.Management.ManagementObject o in searcher.Get())
+                            if (Convert.ToString(o["Description"]) == "Optimizzzer self-test") points++;
+                    log("restore points named 'Optimizzzer self-test' found: " + points);
+                    if (points == 0) throw new Exception("restore point reported as created but not listed");
+                }
                 var after = win.Registry.GetValue(Hive.LocalMachine, key, "SystemRestorePointCreationFrequency");
                 if (!Equals(before, after)) throw new Exception("the 24 h frequency limit was not put back");
             });
