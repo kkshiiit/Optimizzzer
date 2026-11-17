@@ -14,6 +14,8 @@ namespace Optimizzzer.Core.Catalog
         /// <summary>Fixed id for the Ultimate Performance copy, so detection and undo always find it.</summary>
         public const string UltimatePlanGuid = "b6a1d7e2-3c4f-4a5b-9e8d-7f6a5b4c3d2e";
         private const string UltimateTemplate = "e9a42b02-d5df-448d-aa00-03f14749eb61";
+        // Fallback for PCs where the hidden Ultimate scheme is unavailable (for example Modern Standby).
+        private const string HighPerformanceTemplate = "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c";
         private static readonly Regex GuidRx = new Regex(@"[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}");
 
         public static void Add(List<Tweak> l)
@@ -198,7 +200,7 @@ namespace Optimizzzer.Core.Catalog
         {
             new TweakBuilder(l, "power.ultimate", Category.Power, Risk.Moderate)
                 .Title("Plan de energía Máximo rendimiento", "Ultimate Performance power plan")
-                .Summary("Crea y activa el plan de energía oculto de Microsoft para equipos de alto rendimiento.", "Creates and activates Microsoft's hidden power plan for high-performance PCs.")
+                .Summary("Crea y activa el plan de energía oculto de Microsoft para equipos de alto rendimiento (o Alto rendimiento si tu equipo no lo admite).", "Creates and activates Microsoft's hidden power plan for high-performance PCs (or High performance if your PC does not support it).")
                 .Why("Evita que el procesador y los dispositivos entren en estados de ahorro, reduciendo pequeñas latencias.", "Keeps the processor and devices out of power-saving states, removing small latencies.")
                 .Downside("Más consumo eléctrico y temperatura en reposo. No recomendado en portátiles.", "Higher power use and idle temperature. Not recommended on laptops.")
                 .Source("Microsoft Learn: powercfg, Ultimate Performance scheme")
@@ -216,6 +218,7 @@ namespace Optimizzzer.Core.Catalog
                         if (list.IndexOf(UltimatePlanGuid, StringComparison.OrdinalIgnoreCase) < 0)
                         {
                             var r = c.Process.Run("powercfg", "-duplicatescheme " + UltimateTemplate + " " + UltimatePlanGuid);
+                            if (!r.Ok) r = c.Process.Run("powercfg", "-duplicatescheme " + HighPerformanceTemplate + " " + UltimatePlanGuid);
                             if (!r.Ok) throw new InvalidOperationException("powercfg -duplicatescheme: " + r.Output + r.Error);
                         }
                         var s = c.Process.Run("powercfg", "/setactive " + UltimatePlanGuid);
