@@ -32,21 +32,28 @@ namespace Optimizzzer.Windows
         private ProcessResult PowerShell(string script, int timeoutMs = 180000)
         {
             var encoded = Convert.ToBase64String(System.Text.Encoding.Unicode.GetBytes(
-                "$ProgressPreference='SilentlyContinue';[Console]::OutputEncoding=[Text.Encoding]::UTF8;" + script));
+                "$ProgressPreference='SilentlyContinue';" + script));
             return _proc.Run("powershell.exe", "-NoProfile -NonInteractive -ExecutionPolicy Bypass -EncodedCommand " + encoded, timeoutMs);
         }
 
+        private Exception _listError;
+
         public void Refresh()
         {
-            lock (_lock) _installed = null;
+            lock (_lock) { _installed = null; _listError = null; }
         }
 
         public bool IsInstalled(string packageName)
         {
             lock (_lock)
             {
+                // A failed listing is remembered so a scan does not start PowerShell once per app.
+                if (_listError != null) throw new InvalidOperationException(_listError.Message, _listError);
                 if (_installed == null)
-                    _installed = new HashSet<string>(List().Select(a => a.Name), StringComparer.OrdinalIgnoreCase);
+                {
+                    try { _installed = new HashSet<string>(List().Select(a => a.Name), StringComparer.OrdinalIgnoreCase); }
+                    catch (Exception ex) { _listError = ex; throw; }
+                }
                 return _installed.Contains(packageName);
             }
         }
@@ -69,7 +76,9 @@ namespace Optimizzzer.Windows
             var r = PowerShell(
                 "Get-AppxPackage -AllUsers | Select-Object Name,PackageFullName,Publisher,@{n='Version';e={$_.Version.ToString()}},NonRemovable,IsFramework,@{n='Sig';e={$_.SignatureKind.ToString()}} | ConvertTo-Json -Compress");
             var list = new List<AppxInfo>();
-            if (!r.Ok || string.IsNullOrWhiteSpace(r.Output)) return list;
+            // Never treat a failed query as "nothing installed": that would mark every app tweak as already done.
+            if (!r.Ok) throw new InvalidOperationException("Get-AppxPackage failed: " + (r.Error.Length > 0 ? r.Error : r.Output).Trim());
+            if (string.IsNullOrWhiteSpace(r.Output)) return list;
             var json = r.Output.Trim();
             if (json.StartsWith("{")) json = "[" + json + "]";
             var ser = new JavaScriptSerializer { MaxJsonLength = int.MaxValue };

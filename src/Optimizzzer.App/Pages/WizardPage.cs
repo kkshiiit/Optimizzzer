@@ -40,6 +40,20 @@ namespace Optimizzzer.App.Pages
             OnShown();
         }
 
+        /// <summary>Self-test only: renders the profile, selection and review steps. Never applies anything.</summary>
+        public void ShowStepsForTest(Action<string> afterEach)
+        {
+            foreach (var step in new[] { Step.Profile, Step.Select, Step.Review })
+            {
+                _step = step;
+                Invalidate();
+                W.ShowView(View);
+                afterEach(step.ToString());
+            }
+            _step = Step.Scan;
+            Invalidate();
+        }
+
         public override void OnShown()
         {
             if (_step == Step.Scan && S.ScanResults == null && !_scanning && _scanError == null) _ = ScanAsync();
