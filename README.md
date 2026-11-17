@@ -38,7 +38,7 @@ No aplica ajustes placebo ni peligrosos. La lista y los motivos están en [docs/
 
 ## Descargar
 
-Cada push genera el ejecutable en GitHub Actions: pestaña **Actions**, ejecución **build**, artefacto **Optimizzzer**.
+Descarga `Optimizzzer.exe` desde la sección **Releases** del repositorio (versión actual: v1.0.0). Las notas de cada versión incluyen el hash SHA-256 del ejecutable para comprobar que no se ha modificado.
 
 Windows SmartScreen avisará al abrirlo porque el exe no está firmado. Pulsa "Más información" y luego "Ejecutar de todas formas".
 
