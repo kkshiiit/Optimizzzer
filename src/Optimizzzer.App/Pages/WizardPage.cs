@@ -423,6 +423,14 @@ namespace Optimizzzer.App.Pages
             return frame;
         }
 
+        private static string RiskCounts(int moderate, int advanced)
+        {
+            var parts = new List<string>();
+            if (moderate > 0) parts.Add(moderate + (moderate == 1 ? Loc.S(" cambio de riesgo moderado", " moderate-risk change") : Loc.S(" cambios de riesgo moderado", " moderate-risk changes")));
+            if (advanced > 0) parts.Add(advanced + (advanced == 1 ? Loc.S(" cambio avanzado", " advanced change") : Loc.S(" cambios avanzados", " advanced changes")));
+            return string.Join(Loc.S(" y ", " and "), parts);
+        }
+
         private static bool Matches(Tweak t, string q)
         {
             bool In(string s) => s.IndexOf(q, StringComparison.CurrentCultureIgnoreCase) >= 0;
@@ -443,8 +451,10 @@ namespace Optimizzzer.App.Pages
 
             var notes = Ui.Stack(8,
                 Ui.Notice(Icons.Info, "AccentText", tweaks.Count + Loc.S(" cambios. Esta es la lista exacta de lo que se va a modificar; todavía no se ha tocado nada.", " changes. This is the exact list of what will be modified; nothing has been touched yet.")),
-                moderate + advanced > 0 ? Ui.Notice(Icons.Warning, "Moderate", Loc.S("Incluye ", "Includes ") + moderate + Loc.S(" de riesgo moderado y ", " moderate and ") + advanced + Loc.S(" avanzados. Lee su inconveniente antes de seguir.", " advanced. Read their downside before continuing.")) : null,
-                permanent > 0 ? Ui.Notice(Icons.Error, "Advanced", permanent + Loc.S(" cambios no se pueden deshacer desde Optimizzzer (desinstalar apps). Se recuperan reinstalando desde la Microsoft Store.", " changes cannot be undone from Optimizzzer (uninstalling apps). You get them back by reinstalling from the Microsoft Store.")) : null,
+                moderate + advanced > 0 ? Ui.Notice(Icons.Warning, "Moderate", Loc.S("Incluye ", "Includes ") + RiskCounts(moderate, advanced) + Loc.S(". Lee su inconveniente antes de seguir.", ". Read their downside before continuing.")) : null,
+                permanent > 0 ? Ui.Notice(Icons.Error, "Advanced", (permanent == 1
+                    ? Loc.S("1 cambio no se puede deshacer desde Optimizzzer (desinstalar una app). Se recupera reinstalándola desde la Microsoft Store.", "1 change cannot be undone from Optimizzzer (uninstalling an app). You get it back by reinstalling it from the Microsoft Store.")
+                    : permanent + Loc.S(" cambios no se pueden deshacer desde Optimizzzer (desinstalar apps). Se recuperan reinstalando desde la Microsoft Store.", " changes cannot be undone from Optimizzzer (uninstalling apps). You get them back by reinstalling from the Microsoft Store."))) : null,
                 restart != RestartKind.None ? Ui.Notice(Icons.Restart, "FgMuted", Names.Of(restart) + ".") : null);
 
             var rp = new CheckBox { Content = Loc.S("Crear un punto de restauración antes de aplicar (recomendado)", "Create a restore point before applying (recommended)"), IsChecked = S.CreateRestorePoint, Margin = new Thickness(0, 8, 0, 0) };

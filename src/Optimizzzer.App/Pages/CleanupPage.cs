@@ -134,7 +134,12 @@ namespace Optimizzzer.App.Pages
             g.Children.Add(middle);
             if (right != null)
             {
-                if (right is FrameworkElement fe) fe.Margin = new Thickness(16, 0, 0, 0);
+                if (right is FrameworkElement fe)
+                {
+                    fe.Margin = new Thickness(16, 0, 0, 0);
+                    // Controls keep their natural height instead of stretching to a tall row.
+                    fe.VerticalAlignment = VerticalAlignment.Top;
+                }
                 Grid.SetColumn(right, 2);
                 g.Children.Add(right);
             }
