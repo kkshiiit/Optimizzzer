@@ -54,7 +54,7 @@ jobs:
             if (-not $p.WaitForExit(300000)) { Stop-Process -Id $p.Id -Force; throw "timeout: $a" }
             return $p.ExitCode
           }
-          $ids = 'privacy.telemetry,privacy.diagtrack,privacy.telemetryTasks,privacy.webSearch,perf.menuDelay,gaming.windowedOptimizations,gaming.gameDvr,power.fastStartup,update.stayOnVersion,svc.fax,ui.homeGallery,ui.fileExtensions,network.llmnr'
+          $ids = 'privacy.telemetry,privacy.diagtrack,privacy.telemetryTasks,privacy.webSearch,perf.menuDelay,gaming.windowedOptimizations,gaming.gameDvr,power.fastStartup,update.stayOnVersion,svc.fax,ui.homeGallery,ui.fileExtensions,network.llmnr,svc.spooler,svc.maps,perf.searchIndex,power.ultimate,svc.xbox'
           Invoke-Opt @('-Scan','-Lang','en') before.txt | Out-Null
           $code = Invoke-Opt @('-Apply',$ids,'-Silent','-NoRestorePoint','-Lang','en') apply.txt
           Get-Content apply.txt

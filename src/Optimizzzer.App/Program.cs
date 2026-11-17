@@ -235,13 +235,23 @@ namespace Optimizzzer.App
             }
 
             var before = win.Measurer.Take("before");
-            var progress = new Progress<ApplyProgress>(p => { if (p.LastEntry != null) Console.WriteLine("  " + p.LastEntry.Result.PadRight(8) + p.Current.Id + (p.LastEntry.Error != null ? "  " + p.LastEntry.Error : "")); });
+            var progress = new SyncProgress<ApplyProgress>(p => { if (p.LastEntry != null) Console.WriteLine("  " + p.LastEntry.Result.PadRight(8) + p.Current.Id + (p.LastEntry.Error != null ? "  " + p.LastEntry.Error : "")); });
             var session = engine.Apply(chosen, new ApplyOptions { CreateRestorePoint = !o.NoRestorePoint }, progress, CancellationToken.None);
-            Console.WriteLine(session.RestorePointCreated ? Loc.S("Punto de restauración creado.", "Restore point created.") : Loc.S("Sin punto de restauración: ", "No restore point: ") + session.RestorePointError);
+            Console.WriteLine(session.RestorePointCreated ? Loc.S("Punto de restauración creado.", "Restore point created.")
+                : o.NoRestorePoint ? Loc.S("Sin punto de restauración (-NoRestorePoint).", "No restore point (-NoRestorePoint).")
+                : Loc.S("No se pudo crear el punto de restauración: ", "Could not create a restore point: ") + session.RestorePointError);
             Console.WriteLine(Loc.S("Sesión: ", "Session: ") + session.Id + Loc.S("  (deshacer: -Undo ", "  (undo: -Undo ") + session.Id + ")");
             if (o.ReportPath != null)
                 File.WriteAllText(o.ReportPath, HtmlReport.Build(lang, ctx.Info, session, TweakCatalog.All.ToList(), before, win.Measurer.Take("after"), DateTime.Now), new UTF8Encoding(false));
             return session.Entries.Any(e => e.ResultKind == EntryResult.Failed) ? 1 : 0;
         }
+    }
+
+    /// <summary>Reports on the calling thread, so console lines come out in order.</summary>
+    internal sealed class SyncProgress<T> : IProgress<T>
+    {
+        private readonly Action<T> _a;
+        public SyncProgress(Action<T> a) { _a = a; }
+        public void Report(T value) => _a(value);
     }
 }
