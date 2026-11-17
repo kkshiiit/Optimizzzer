@@ -20,7 +20,7 @@ namespace Optimizzzer.Windows
 
         public WinRestorePoint(IRegistry reg) { _reg = reg; }
 
-        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+        [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode, Pack = 1)] // srrestoreptapi.h uses #pragma pack(1)
         private struct RESTOREPOINTINFOW
         {
             public int dwEventType;
@@ -30,7 +30,7 @@ namespace Optimizzzer.Windows
             public string szDescription;
         }
 
-        [StructLayout(LayoutKind.Sequential)]
+        [StructLayout(LayoutKind.Sequential, Pack = 1)]
         private struct STATEMGRSTATUS
         {
             public int nStatus;
@@ -46,7 +46,7 @@ namespace Optimizzzer.Windows
             var drive = Path.GetPathRoot(Environment.SystemDirectory);
             // Windows silently skips a new point if another was made in the last 24 h; lift that limit for this call only.
             var previous = _reg.GetValue(Hive.LocalMachine, FrequencyKey, FrequencyValue);
-            var started = DateTime.UtcNow.AddMinutes(-1);
+            long lastBefore = LastSequence(out _);
             try
             {
                 _reg.SetValue(Hive.LocalMachine, FrequencyKey, FrequencyValue, RegValue.DWord(0));
@@ -59,8 +59,9 @@ namespace Optimizzzer.Windows
                 if (!SRSetRestorePointW(ref end, out var endStatus))
                     return "SRSetRestorePoint (end) failed with status " + endStatus.nStatus + Hint(endStatus.nStatus);
 
-                return Exists(description, started) ? null
-                    : "Windows accepted the request but did not create the restore point (System Protection may be limited by policy or disk space).";
+                if (LastSequence(out var listed) > lastBefore) return null;
+                return "Windows accepted the request but did not create the restore point (sequence " + status.llSequenceNumber
+                    + ", listed: " + listed + "). System Protection may be limited by policy or disk space.";
             }
             catch (DllNotFoundException)
             {
@@ -107,17 +108,24 @@ namespace Optimizzzer.Windows
             }
         }
 
-        /// <summary>True when Windows lists a restore point with this description created after <paramref name="sinceUtc"/>.</summary>
-        public static bool Exists(string description, DateTime sinceUtc)
+        /// <summary>Highest restore point sequence number Windows lists (0 when there are none), plus a short listing for diagnostics.</summary>
+        public static long LastSequence(out string listing)
         {
-            using (var searcher = new ManagementObjectSearcher(@"root\default", "SELECT Description, CreationTime FROM SystemRestore"))
-                foreach (ManagementObject o in searcher.Get())
-                {
-                    if (Convert.ToString(o["Description"]) != description) continue;
-                    var created = ManagementDateTimeConverter.ToDateTime(Convert.ToString(o["CreationTime"])).ToUniversalTime();
-                    if (created >= sinceUtc) return true;
-                }
-            return false;
+            long max = 0;
+            var parts = new System.Collections.Generic.List<string>();
+            try
+            {
+                using (var searcher = new ManagementObjectSearcher(@"root\default", "SELECT SequenceNumber, Description, CreationTime FROM SystemRestore"))
+                    foreach (ManagementObject o in searcher.Get())
+                    {
+                        var seq = Convert.ToInt64(o["SequenceNumber"]);
+                        if (seq > max) max = seq;
+                        parts.Add(seq + ":" + Convert.ToString(o["Description"]));
+                    }
+            }
+            catch (Exception ex) { parts.Add("error " + ex.Message); }
+            listing = parts.Count == 0 ? "none" : string.Join(", ", parts);
+            return max;
         }
 
         private static string Hint(int status)
