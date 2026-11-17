@@ -21,17 +21,18 @@ jobs:
       - name: Build Optimizzzer.exe
         run: dotnet build src/Optimizzzer.App -c Release
 
-      - name: Self-test (every screen, read-only scan, wizard apply and undo)
-        timeout-minutes: 8
+      - name: Self-test (every screen, screenshots, wizard apply and undo, every tool)
+        timeout-minutes: 12
         shell: pwsh
         env:
           OPTIMIZZZER_SELFTEST_APPLY: '1'
         run: |
           $exe = Resolve-Path src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe
           $p = Start-Process -FilePath $exe -ArgumentList '-SelfTest' -PassThru
-          $done = $p.WaitForExit(390000)
+          $done = $p.WaitForExit(600000)
           $log = Join-Path $env:TEMP 'optimizzzer-selftest.txt'
           if (Test-Path $log) { Get-Content $log } else { Write-Host 'No self-test log was written' }
+          if (Test-Path "$env:TEMP\optimizzzer-shots") { Copy-Item "$env:TEMP\optimizzzer-shots" screenshots -Recurse }
           if (-not $done) { Stop-Process -Id $p.Id -Force; throw 'Self-test did not finish' }
           if ($p.ExitCode -ne 0) { throw "Self-test failed with exit code $($p.ExitCode)" }
 
@@ -77,3 +78,9 @@ jobs:
         with:
           name: Optimizzzer
           path: src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Screenshots
+          path: screenshots
