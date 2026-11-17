@@ -1,0 +1,36 @@
+﻿
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "src", "src", "{8C83E3DA-6E73-4EE2-9EF8-2FAA584B1402}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Optimizzzer.Core", "src\Optimizzzer.Core\Optimizzzer.Core.csproj", "{67E91C8C-7C7A-40C8-9D60-03CA8FA7ECE4}"
+EndProject
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{E3A8625F-8F78-4902-9B08-387B433179ED}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Optimizzzer.Tests", "tests\Optimizzzer.Tests\Optimizzzer.Tests.csproj", "{EF164687-18CE-46F4-BB1F-A43E6EF34EA3}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(SolutionProperties) = preSolution
+		HideSolutionNode = FALSE
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{67E91C8C-7C7A-40C8-9D60-03CA8FA7ECE4}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{67E91C8C-7C7A-40C8-9D60-03CA8FA7ECE4}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{67E91C8C-7C7A-40C8-9D60-03CA8FA7ECE4}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{67E91C8C-7C7A-40C8-9D60-03CA8FA7ECE4}.Release|Any CPU.Build.0 = Release|Any CPU
+		{EF164687-18CE-46F4-BB1F-A43E6EF34EA3}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{EF164687-18CE-46F4-BB1F-A43E6EF34EA3}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{EF164687-18CE-46F4-BB1F-A43E6EF34EA3}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{EF164687-18CE-46F4-BB1F-A43E6EF34EA3}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(NestedProjects) = preSolution
+		{67E91C8C-7C7A-40C8-9D60-03CA8FA7ECE4} = {8C83E3DA-6E73-4EE2-9EF8-2FAA584B1402}
+		{EF164687-18CE-46F4-BB1F-A43E6EF34EA3} = {E3A8625F-8F78-4902-9B08-387B433179ED}
+	EndGlobalSection
+EndGlobal
