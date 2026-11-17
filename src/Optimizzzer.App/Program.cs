@@ -98,7 +98,7 @@ namespace Optimizzzer.App
             };
             var watchdog = new Thread(() =>
             {
-                Thread.Sleep(TimeSpan.FromMinutes(5));
+                Thread.Sleep(TimeSpan.FromMinutes(9));
                 lock (log) log.AppendLine("SELFTEST TIMEOUT");
                 Flush();
                 Environment.Exit(2);
@@ -146,12 +146,15 @@ namespace Optimizzzer.App
                         Loc.Lang = lang;
                         var w = new MainWindow(state) { ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
                         w.Show();
+                        bool shots = (theme == ThemeChoice.Light && lang == Lang.Es) || (theme == ThemeChoice.Dark && lang == Lang.En);
                         void Verify(string what)
                         {
                             Pump();
+                            if (shots) { Pump(); Pump(); Pump(); }
                             w.UpdateLayout();
                             var v = w.CurrentView;
                             if (v == null || v.ActualWidth <= 0 || v.ActualHeight <= 0) throw new Exception(what + " has no size");
+                            if (shots) SelfTestTools.Screenshot(w, theme + "-" + lang + "-" + what.Replace(' ', '-'));
                         }
                         foreach (var p in w.Pages)
                         {
@@ -203,6 +206,9 @@ namespace Optimizzzer.App
                     w.Close();
                 });
 
+            if (Environment.GetEnvironmentVariable("OPTIMIZZZER_SELFTEST_APPLY") == "1")
+                SelfTestTools.Run(state, Check, s => log.AppendLine("  " + s));
+
             log.AppendLine(failures == 0 ? "SELFTEST OK" : "SELFTEST FAILED: " + failures);
             Flush();
             WindowsSystem.AttachParentConsole();
@@ -212,7 +218,7 @@ namespace Optimizzzer.App
         }
 
         /// <summary>Lets queued UI work (loads, layout) run, with a time limit so CI never hangs.</summary>
-        private static void Pump()
+        internal static void Pump()
         {
             var frame = new DispatcherFrame();
             var timer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
