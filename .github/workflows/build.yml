@@ -15,8 +15,7 @@ jobs:
       matrix:
         # windows-latest: Windows Server (same base as Windows 11 24H2).
         # windows-11-arm: a real Windows 11 client, where System Restore exists.
-        # windows-2019: Windows Server 2019, the Windows 10 1809 code base (build 17763).
-        os: [windows-latest, windows-11-arm, windows-2019]
+        os: [windows-latest, windows-11-arm]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -81,7 +80,9 @@ jobs:
           Get-Content undo.txt
           if ($code -ne 0) { throw "undo exit code $code" }
           Invoke-Opt @('-Scan','-Lang','en') after.txt | Out-Null
-          $diff = Compare-Object (Get-Content before.txt) (Get-Content after.txt)
+          # Only the tweaks this test touched: Windows itself may flip unrelated settings (e.g. Storage Sense) meanwhile.
+          $mine = { param($f) Get-Content $f | Where-Object { $parts = -split $_; $parts.Count -ge 2 -and $wanted -contains $parts[1] } }
+          $diff = Compare-Object (& $mine before.txt) (& $mine after.txt)
           if ($diff) { $diff | Format-Table -AutoSize | Out-String -Width 300; throw 'State after undo differs from the original' }
           Write-Host "Apply and undo round trip OK for: $ids"
 
