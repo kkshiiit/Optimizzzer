@@ -49,7 +49,7 @@ namespace Optimizzzer.Windows
             return new SystemContext
             {
                 Registry = Registry, Services = Services, Tasks = Tasks, Process = Process, Appx = Appx,
-                RestorePoint = new WinRestorePoint(Registry), Info = Info,
+                RestorePoint = new WinRestorePoint(Registry, Process), Info = Info,
             };
         }
 
