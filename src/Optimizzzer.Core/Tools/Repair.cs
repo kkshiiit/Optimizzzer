@@ -4,9 +4,14 @@ namespace Optimizzzer.Core.Tools
 {
     public sealed class RepairStep
     {
-        public RepairStep(string file, string args) { File = file; Args = args; }
+        public RepairStep(string file, string args, bool tolerateExitCode = false) { File = file; Args = args; TolerateExitCode = tolerateExitCode; }
         public string File { get; }
         public string Args { get; }
+        /// <summary>
+        /// Some tools report a non-zero code even when the job is done (netsh int ip reset denies one protected key
+        /// on most PCs; net stop returns 2 for a service that is already stopped). Those codes are shown, not treated as failure.
+        /// </summary>
+        public bool TolerateExitCode { get; }
         public override string ToString() => File + " " + Args;
     }
 
@@ -49,7 +54,7 @@ namespace Optimizzzer.Core.Tools
                 {
                     new RepairStep("ipconfig.exe", "/flushdns"),
                     new RepairStep("netsh.exe", "winsock reset"),
-                    new RepairStep("netsh.exe", "int ip reset"),
+                    new RepairStep("netsh.exe", "int ip reset", tolerateExitCode: true),
                 },
             },
             new RepairTask
@@ -59,12 +64,12 @@ namespace Optimizzzer.Core.Tools
                 Duration = new Text("1 a 2 minutos", "1 to 2 minutes"),
                 Steps =
                 {
-                    new RepairStep("net.exe", "stop wuauserv"),
-                    new RepairStep("net.exe", "stop bits"),
-                    new RepairStep("net.exe", "stop cryptsvc"),
-                    new RepairStep("cmd.exe", "/c if exist %SystemRoot%\\SoftwareDistribution.old rd /s /q %SystemRoot%\\SoftwareDistribution.old"),
+                    new RepairStep("net.exe", "stop wuauserv", tolerateExitCode: true),
+                    new RepairStep("net.exe", "stop bits", tolerateExitCode: true),
+                    new RepairStep("net.exe", "stop cryptsvc", tolerateExitCode: true),
+                    new RepairStep("cmd.exe", "/c if exist %SystemRoot%\\SoftwareDistribution.old rd /s /q %SystemRoot%\\SoftwareDistribution.old", tolerateExitCode: true),
                     new RepairStep("cmd.exe", "/c ren %SystemRoot%\\SoftwareDistribution SoftwareDistribution.old"),
-                    new RepairStep("cmd.exe", "/c if exist %SystemRoot%\\System32\\catroot2.old rd /s /q %SystemRoot%\\System32\\catroot2.old"),
+                    new RepairStep("cmd.exe", "/c if exist %SystemRoot%\\System32\\catroot2.old rd /s /q %SystemRoot%\\System32\\catroot2.old", tolerateExitCode: true),
                     new RepairStep("cmd.exe", "/c ren %SystemRoot%\\System32\\catroot2 catroot2.old"),
                     new RepairStep("net.exe", "start cryptsvc"),
                     new RepairStep("net.exe", "start bits"),
@@ -86,8 +91,8 @@ namespace Optimizzzer.Core.Tools
                 Steps =
                 {
                     new RepairStep("ie4uinit.exe", "-show"),
-                    new RepairStep("taskkill.exe", "/f /im explorer.exe"),
-                    new RepairStep("cmd.exe", "/c del /a /q \"%LOCALAPPDATA%\\IconCache.db\" & del /a /q \"%LOCALAPPDATA%\\Microsoft\\Windows\\Explorer\\iconcache_*.db\""),
+                    new RepairStep("taskkill.exe", "/f /im explorer.exe", tolerateExitCode: true),
+                    new RepairStep("cmd.exe", "/c del /a /q \"%LOCALAPPDATA%\\IconCache.db\" & del /a /q \"%LOCALAPPDATA%\\Microsoft\\Windows\\Explorer\\iconcache_*.db\"", tolerateExitCode: true),
                 },
                 RestartsExplorer = true,
             },

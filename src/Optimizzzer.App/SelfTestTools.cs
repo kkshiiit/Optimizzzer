@@ -121,7 +121,7 @@ namespace Optimizzzer.App
                     int lines = 0;
                     var code = win.Process.RunStreaming(step.File, step.Args, _ => lines++, System.Threading.CancellationToken.None);
                     log(step + " exit " + code + ", " + lines + " lines");
-                    if (code != 0) throw new Exception(step + " failed");
+                    if (code != 0 && !step.TolerateExitCode) throw new Exception(step + " failed");
                 }
                 string last = null;
                 var dism = win.Process.RunStreaming("DISM.exe", "/Online /Cleanup-Image /CheckHealth", l => last = l, System.Threading.CancellationToken.None);
