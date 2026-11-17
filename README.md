@@ -7,7 +7,7 @@ Optimizador para Windows 10 y 11. Es un único `Optimizzzer.exe` de unos 500 KB 
 **Asistente paso a paso**
 1. Análisis: lee tu equipo y el estado real de cada ajuste. Solo lee.
 2. Perfil: Mínimo seguro, Trabajo y estudio, Juegos, Portátil y batería o Privacidad máxima. Te recomienda uno según tu hardware.
-3. Selección: 108 ajustes en 10 categorías, con buscador. Cada uno se puede desplegar para ver por qué, qué pierdes, qué cambia exactamente (clave de registro, servicio o tarea) y la fuente.
+3. Selección: 107 ajustes en 10 categorías, con buscador. Cada uno se puede desplegar para ver por qué, qué pierdes, qué cambia exactamente (clave de registro, servicio o tarea) y la fuente.
 4. Revisión: la lista exacta de cambios antes de tocar nada (modo simulación).
 5. Aplicar: crea un punto de restauración y guarda el valor anterior de cada cambio. Si un ajuste falla, se revierte solo.
 6. Resultado: mediciones antes y después tomadas en tu equipo, e informe HTML.
@@ -53,7 +53,13 @@ Optimizzzer.exe -Undo all
 
 ## Antes de usarlo en tu PC
 
-El código se compila y se prueba automáticamente: tests del núcleo, y en un Windows de GitHub una auto-prueba que carga todas las pantallas y hace un análisis de solo lectura. Aun así, pruébalo primero en una máquina virtual con Windows 10 y otra con Windows 11:
+Cada cambio de código se verifica automáticamente en un Windows real de GitHub (Windows Server 2025, misma base que Windows 11 24H2):
+
+- 27 tests del núcleo, entre ellos "aplicar todo y deshacer deja el estado idéntico".
+- Auto-prueba de la interfaz: primer análisis como en un arranque normal, todas las pantallas en tema claro y oscuro, en español e inglés, y aplicar y deshacer tres ajustes desde el asistente.
+- Ida y vuelta real por línea de comandos: aplica 18 ajustes de registro, servicios, tareas programadas, DirectX y plan de energía, comprueba que quedan aplicados, lo deshace todo y verifica que el análisis final es idéntico al inicial.
+
+Windows 10 no se prueba automáticamente. Antes de usarlo en tu PC, pruébalo en una máquina virtual con Windows 10 y otra con Windows 11:
 
 1. Abre la app y completa el análisis.
 2. Aplica el perfil Mínimo seguro.
