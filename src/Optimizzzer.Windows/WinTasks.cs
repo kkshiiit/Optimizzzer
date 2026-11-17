@@ -44,8 +44,11 @@ namespace Optimizzzer.Windows
                 dynamic f = svc.GetFolder(folder);
                 return f.GetTask(name);
             }
-            catch (COMException) { return null; }
-            catch (System.IO.FileNotFoundException) { return null; }
+            catch (Exception ex) when (ex is COMException || ex is System.IO.IOException || ex is UnauthorizedAccessException)
+            {
+                // Missing task or folder (0x80070002 / 0x80070003): the task does not exist on this PC.
+                return null;
+            }
         }
 
         public bool? IsEnabled(string path)

@@ -68,6 +68,9 @@ namespace Optimizzzer.App.Shell
 
         public IReadOnlyList<AppPage> Pages => _pages;
 
+        /// <summary>What is on screen right now (used by the self-test).</summary>
+        public FrameworkElement CurrentView => _host.Content as FrameworkElement;
+
         private FrameworkElement BuildNav()
         {
             var border = new Border { BorderThickness = new Thickness(0, 0, 1, 0), Padding = new Thickness(12, 20, 12, 12) };

@@ -70,11 +70,25 @@ namespace Optimizzzer.App
         {
             var log = new StringBuilder();
             int failures = 0;
+            var outPath = Path.Combine(Path.GetTempPath(), "optimizzzer-selftest.txt");
+            void Flush() { try { File.WriteAllText(outPath, log.ToString()); } catch (Exception) { } }
             void Check(string name, Action a)
             {
+                log.AppendLine("RUN  " + name + " " + DateTime.Now.ToString("HH:mm:ss"));
+                Flush();
                 try { a(); log.AppendLine("PASS " + name); }
                 catch (Exception ex) { failures++; log.AppendLine("FAIL " + name + ": " + ex); }
+                Flush();
             }
+            // CI must never hang: if something blocks, record it and exit with a distinct code.
+            var watchdog = new Thread(() =>
+            {
+                Thread.Sleep(TimeSpan.FromMinutes(5));
+                lock (log) log.AppendLine("SELFTEST TIMEOUT");
+                Flush();
+                Environment.Exit(2);
+            }) { IsBackground = true };
+            watchdog.Start();
 
             var app = new Application { ShutdownMode = ShutdownMode.OnExplicitShutdown };
             Check("styles parse", () => Theme.LoadStyles(app.Resources));
@@ -101,20 +115,29 @@ namespace Optimizzzer.App
                         Loc.Lang = lang;
                         var w = new MainWindow(state) { ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
                         w.Show();
+                        void Verify(string what)
+                        {
+                            Pump();
+                            w.UpdateLayout();
+                            var v = w.CurrentView;
+                            if (v == null || v.ActualWidth <= 0 || v.ActualHeight <= 0) throw new Exception(what + " has no size");
+                        }
                         foreach (var p in w.Pages)
                         {
                             w.Navigate(p.Key);
-                            Pump();
-                            w.UpdateLayout();
-                            if (p.View.ActualWidth <= 0) throw new Exception("page " + p.Key + " has no size");
+                            Verify("page " + p.Key);
                         }
+                        // Pick the recommended profile so the selection and review steps have content.
+                        foreach (var t in Profiles.Select(state.ScanResults, Profiles.Recommend(state.Ctx.Info), state.Ctx.Info)) state.Selected.Add(t.Id);
+                        w.Navigate("wizard");
+                        w.Pages.OfType<Pages.WizardPage>().First().ShowStepsForTest(step => Verify("wizard step " + step));
+                        state.Selected.Clear();
                         w.Close();
                     });
                 }
 
             log.AppendLine(failures == 0 ? "SELFTEST OK" : "SELFTEST FAILED: " + failures);
-            var outPath = Path.Combine(Path.GetTempPath(), "optimizzzer-selftest.txt");
-            File.WriteAllText(outPath, log.ToString());
+            Flush();
             WindowsSystem.AttachParentConsole();
             Console.WriteLine(log.ToString());
             app.Shutdown();

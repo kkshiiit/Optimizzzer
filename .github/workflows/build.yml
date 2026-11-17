@@ -22,20 +22,26 @@ jobs:
         run: dotnet build src/Optimizzzer.App -c Release
 
       - name: Self-test (loads every screen, read-only scan)
+        timeout-minutes: 8
         shell: pwsh
         run: |
           $exe = Resolve-Path src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe
-          $p = Start-Process -FilePath $exe -ArgumentList '-SelfTest' -Wait -PassThru
+          $p = Start-Process -FilePath $exe -ArgumentList '-SelfTest' -PassThru
+          $done = $p.WaitForExit(390000)
           $log = Join-Path $env:TEMP 'optimizzzer-selftest.txt'
           if (Test-Path $log) { Get-Content $log } else { Write-Host 'No self-test log was written' }
+          if (-not $done) { Stop-Process -Id $p.Id -Force; throw 'Self-test did not finish' }
           if ($p.ExitCode -ne 0) { throw "Self-test failed with exit code $($p.ExitCode)" }
 
       - name: CLI dry run
+        timeout-minutes: 5
         shell: pwsh
         run: |
           $exe = Resolve-Path src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe
-          $p = Start-Process -FilePath $exe -ArgumentList '-Profile','Gaming','-DryRun','-Lang','en' -Wait -PassThru -RedirectStandardOutput dry.txt
+          $p = Start-Process -FilePath $exe -ArgumentList '-Profile','Gaming','-DryRun','-Lang','en' -PassThru -RedirectStandardOutput dry.txt
+          $done = $p.WaitForExit(240000)
           Get-Content dry.txt
+          if (-not $done) { Stop-Process -Id $p.Id -Force; throw 'Dry run did not finish' }
           if ($p.ExitCode -ne 0) { throw "Dry run failed with exit code $($p.ExitCode)" }
 
       - uses: actions/upload-artifact@v4
