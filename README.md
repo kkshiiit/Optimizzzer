@@ -62,13 +62,20 @@ Optimizzzer.exe -Undo all
 
 ## Antes de usarlo en tu PC
 
-Cada cambio de código se verifica automáticamente en un Windows real de GitHub (Windows Server 2025, misma base que Windows 11 24H2):
+Cada cambio de código se verifica automáticamente en dos Windows reales de GitHub: **Windows 11 Enterprise** (cliente, 10.0.26200) y **Windows Server 2025** (misma base que Windows 11 24H2):
 
 - 27 tests del núcleo, entre ellos "aplicar todo y deshacer deja el estado idéntico".
-- Auto-prueba de la interfaz: primer análisis como en un arranque normal, todas las pantallas en tema claro y oscuro, en español e inglés, y aplicar y deshacer tres ajustes desde el asistente.
-- Ida y vuelta real por línea de comandos: aplica 18 ajustes de registro, servicios, tareas programadas, DirectX y plan de energía, comprueba que quedan aplicados, lo deshace todo y verifica que el análisis final es idéntico al inicial.
+- Interfaz: primer análisis como en un arranque normal, todas las pantallas en tema claro y oscuro, en español e inglés, y aplicar y deshacer desde el asistente. Se guardan capturas en `docs/screenshots/`.
+- Herramientas:
+  - Punto de restauración creado y comprobado en la lista de Windows 11.
+  - Limpieza.
+  - DNS: se cambia a Cloudflare y se vuelve al original.
+  - Quitar una app de la Store.
+  - Reparación de red y DISM.
+  - Programas de inicio, servicios, tareas e informe HTML.
+- Ida y vuelta por línea de comandos: aplica 18 ajustes de registro, servicios, tareas programadas, DirectX y plan de energía. Después comprueba que quedan aplicados, lo deshace todo y verifica que el análisis final es idéntico al inicial.
 
-Windows 10 no se prueba automáticamente. Antes de usarlo en tu PC, pruébalo en una máquina virtual con Windows 10 y otra con Windows 11:
+GitHub ya no ofrece máquinas con Windows 10, así que Windows 10 no se prueba automáticamente. Si lo usas en Windows 10, haz antes una pasada en una máquina virtual:
 
 1. Abre la app y completa el análisis.
 2. Aplica el perfil Mínimo seguro.
