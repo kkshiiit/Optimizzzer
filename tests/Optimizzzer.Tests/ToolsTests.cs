@@ -106,3 +106,40 @@ namespace Optimizzzer.Tests
         }
     }
 }
+
+namespace Optimizzzer.Tests
+{
+    public class ManualAndColorTests
+    {
+        [Xunit.Fact]
+        public void Manual_service_change_is_journaled_and_undoable()
+        {
+            var sys = new FakeSystem();
+            sys.Services.Modes["Spooler"] = Optimizzzer.Core.StartMode.Automatic;
+            var engine = new Optimizzzer.Core.TweakEngine(sys.Context, new Optimizzzer.Core.MemoryJournalStore());
+            var t = Optimizzzer.Core.ManualTweaks.Service("Spooler", "Print Spooler", Optimizzzer.Core.StartMode.Disabled);
+            engine.Apply(new[] { t }, new Optimizzzer.Core.ApplyOptions());
+            Xunit.Assert.Equal(Optimizzzer.Core.StartMode.Disabled, sys.Services.Modes["Spooler"]);
+
+            var ids = engine.History().Select(h => h.Entry.TweakId);
+            var catalog = Optimizzzer.Core.ManualTweaks.WithJournal(Optimizzzer.Core.Catalog.TweakCatalog.All, ids);
+            var r = engine.Undo(t.Id, catalog);
+            Xunit.Assert.Single(r.Reverted);
+            Xunit.Assert.Equal(Optimizzzer.Core.StartMode.Automatic, sys.Services.Modes["Spooler"]);
+            Xunit.Assert.NotNull(Optimizzzer.Core.ManualTweaks.FromId(@"manual.task|\Microsoft\Windows\X|False"));
+        }
+
+        [Xunit.Fact]
+        public void Accent_is_adjusted_until_it_passes_AA()
+        {
+            var yellow = ((byte)255, (byte)200, (byte)0);
+            var white = ((byte)255, (byte)255, (byte)255);
+            var fixedLight = Optimizzzer.Core.ColorMath.EnsureContrast(yellow, white, 4.5, darken: true);
+            Xunit.Assert.True(Optimizzzer.Core.ColorMath.Contrast(fixedLight, white) >= 4.5);
+            var navy = ((byte)0, (byte)30, (byte)90);
+            var dark = ((byte)38, (byte)38, (byte)42);
+            var fixedDark = Optimizzzer.Core.ColorMath.EnsureContrast(navy, dark, 4.5, darken: false);
+            Xunit.Assert.True(Optimizzzer.Core.ColorMath.Contrast(fixedDark, dark) >= 4.5);
+        }
+    }
+}
