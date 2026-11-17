@@ -1,0 +1,44 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Unit tests (Core)
+        run: dotnet test tests/Optimizzzer.Tests -c Release
+
+      - name: Build Optimizzzer.exe
+        run: dotnet build src/Optimizzzer.App -c Release
+
+      - name: Self-test (loads every screen, read-only scan)
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe
+          $p = Start-Process -FilePath $exe -ArgumentList '-SelfTest' -Wait -PassThru
+          $log = Join-Path $env:TEMP 'optimizzzer-selftest.txt'
+          if (Test-Path $log) { Get-Content $log } else { Write-Host 'No self-test log was written' }
+          if ($p.ExitCode -ne 0) { throw "Self-test failed with exit code $($p.ExitCode)" }
+
+      - name: CLI dry run
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe
+          $p = Start-Process -FilePath $exe -ArgumentList '-Profile','Gaming','-DryRun','-Lang','en' -Wait -PassThru -RedirectStandardOutput dry.txt
+          Get-Content dry.txt
+          if ($p.ExitCode -ne 0) { throw "Dry run failed with exit code $($p.ExitCode)" }
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Optimizzzer
+          path: src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe
