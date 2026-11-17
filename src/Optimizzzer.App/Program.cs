@@ -136,6 +136,42 @@ namespace Optimizzzer.App
                     });
                 }
 
+            // Only on a throwaway machine (CI sets this variable): apply two tweaks through the wizard UI, then undo them.
+            if (Environment.GetEnvironmentVariable("OPTIMIZZZER_SELFTEST_APPLY") == "1")
+                Check("wizard apply and undo", () =>
+                {
+                    Theme.Apply(ThemeChoice.Light);
+                    var w = new MainWindow(state) { ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
+                    w.Show();
+                    var ids = new[] { "perf.menuDelay", "ui.fileExtensions", "gaming.gameDvr" };
+                    foreach (var id in ids)
+                    {
+                        var t = TweakCatalog.Find(id);
+                        state.Engine.Undo(id, TweakCatalog.All.ToList());
+                        if (state.Engine.Detect(t) == TweakStatus.Applied) throw new Exception(id + " already applied on this machine; pick another");
+                    }
+                    state.Selected.Clear();
+                    foreach (var id in ids) state.Selected.Add(id);
+                    var wizard = w.Pages.OfType<Pages.WizardPage>().First();
+                    w.Navigate("wizard");
+                    wizard.StartApplyForTest();
+                    var until = DateTime.Now.AddSeconds(90);
+                    while (!wizard.ApplyFinishedForTest && DateTime.Now < until) Pump();
+                    if (!wizard.ApplyFinishedForTest) throw new Exception("apply did not reach the result step");
+                    var s = state.LastSession;
+                    log.AppendLine("  " + string.Join(", ", s.Entries.Select(e => e.TweakId + "=" + e.Result)));
+                    if (s.Entries.Count != ids.Length || s.Entries.Any(e => e.ResultKind != EntryResult.Applied)) throw new Exception("not every tweak was applied");
+                    foreach (var id in ids)
+                        if (state.Engine.Detect(TweakCatalog.Find(id)) != TweakStatus.Applied) throw new Exception(id + " not applied");
+                    var undo = state.Engine.UndoSession(s.Id, TweakCatalog.All.ToList());
+                    if (undo.Failed.Count > 0 || undo.Reverted.Count != ids.Length) throw new Exception("undo failed");
+                    foreach (var id in ids)
+                        if (state.Engine.Detect(TweakCatalog.Find(id)) == TweakStatus.Applied) throw new Exception(id + " still applied after undo");
+                    w.Navigate("history");
+                    Pump();
+                    w.Close();
+                });
+
             log.AppendLine(failures == 0 ? "SELFTEST OK" : "SELFTEST FAILED: " + failures);
             Flush();
             WindowsSystem.AttachParentConsole();

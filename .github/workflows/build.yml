@@ -21,9 +21,11 @@ jobs:
       - name: Build Optimizzzer.exe
         run: dotnet build src/Optimizzzer.App -c Release
 
-      - name: Self-test (loads every screen, read-only scan)
+      - name: Self-test (every screen, read-only scan, wizard apply and undo)
         timeout-minutes: 8
         shell: pwsh
+        env:
+          OPTIMIZZZER_SELFTEST_APPLY: '1'
         run: |
           $exe = Resolve-Path src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe
           $p = Start-Process -FilePath $exe -ArgumentList '-SelfTest' -PassThru

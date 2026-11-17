@@ -54,6 +54,15 @@ namespace Optimizzzer.App.Pages
             Invalidate();
         }
 
+        /// <summary>Self-test only (disposable CI machine): runs the real Apply step through the UI and reports the result.</summary>
+        public bool ApplyFinishedForTest => _step == Step.Done && !_applyRunning;
+
+        public void StartApplyForTest()
+        {
+            S.CreateRestorePoint = false;
+            GoTo(Step.Apply);
+        }
+
         public override void OnShown()
         {
             if (_step == Step.Scan && S.ScanResults == null && !_scanning && _scanError == null) _ = ScanAsync();
