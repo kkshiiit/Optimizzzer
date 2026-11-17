@@ -11,6 +11,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "tests", "tests", "{E3A8625F
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Optimizzzer.Tests", "tests\Optimizzzer.Tests\Optimizzzer.Tests.csproj", "{EF164687-18CE-46F4-BB1F-A43E6EF34EA3}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Optimizzzer.Windows", "src\Optimizzzer.Windows\Optimizzzer.Windows.csproj", "{DDA65522-584E-4AC4-9267-29871CADB320}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -28,9 +30,14 @@ Global
 		{EF164687-18CE-46F4-BB1F-A43E6EF34EA3}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{EF164687-18CE-46F4-BB1F-A43E6EF34EA3}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{EF164687-18CE-46F4-BB1F-A43E6EF34EA3}.Release|Any CPU.Build.0 = Release|Any CPU
+		{DDA65522-584E-4AC4-9267-29871CADB320}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{DDA65522-584E-4AC4-9267-29871CADB320}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{DDA65522-584E-4AC4-9267-29871CADB320}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{DDA65522-584E-4AC4-9267-29871CADB320}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(NestedProjects) = preSolution
 		{67E91C8C-7C7A-40C8-9D60-03CA8FA7ECE4} = {8C83E3DA-6E73-4EE2-9EF8-2FAA584B1402}
 		{EF164687-18CE-46F4-BB1F-A43E6EF34EA3} = {E3A8625F-8F78-4902-9B08-387B433179ED}
+		{DDA65522-584E-4AC4-9267-29871CADB320} = {8C83E3DA-6E73-4EE2-9EF8-2FAA584B1402}
 	EndGlobalSection
 EndGlobal
