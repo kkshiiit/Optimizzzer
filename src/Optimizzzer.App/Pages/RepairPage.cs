@@ -69,8 +69,7 @@ namespace Optimizzzer.App.Pages
                     Append("> " + step);
                     var code = await Task.Run(() => S.Win.Process.RunStreaming(Environment.ExpandEnvironmentVariables(step.File), step.Args, Append, _cts.Token));
                     Append(Loc.S("Código de salida: ", "Exit code: ") + code);
-                    // net stop on a stopped service returns 2; that is fine for the reset sequences.
-                    if (code != 0 && !(step.File == "net.exe" && code == 2)) ok = false;
+                    if (code != 0 && !step.TolerateExitCode) ok = false;
                 }
                 if (t.RestartsExplorer) await Task.Run(() => S.Win.RestartExplorer());
             }

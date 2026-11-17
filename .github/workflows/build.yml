@@ -5,6 +5,9 @@ on:
   pull_request:
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   windows:
     runs-on: windows-latest
@@ -84,3 +87,22 @@ jobs:
         with:
           name: Screenshots
           path: screenshots
+
+      # Run manually (workflow_dispatch) to refresh the screenshots shown in the README.
+      - name: Commit README screenshots
+        if: github.event_name == 'workflow_dispatch' && success()
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force docs/screenshots | Out-Null
+          $pick = 'Light-Es-page-wizard','Light-Es-wizard-step-Profile','Light-Es-wizard-step-Select','Light-Es-wizard-step-Review',
+                  'Light-Es-page-cleanup','Light-Es-page-dns','Light-Es-page-history',
+                  'Dark-En-page-wizard','Dark-En-wizard-step-Select','Dark-En-page-services','Dark-En-page-startup','Dark-En-page-repair'
+          foreach ($n in $pick) { if (Test-Path "screenshots/$n.png") { Copy-Item "screenshots/$n.png" "docs/screenshots/$n.png" -Force } }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Update README screenshots [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          }
