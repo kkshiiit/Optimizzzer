@@ -132,6 +132,7 @@ namespace Optimizzzer.App.Shell
                     if (kv[0] == "tour" && kv[1] == "done") TourDone = true;
                     if (kv[0] == "lang" && !LanguageFromCommandLine && Enum.TryParse<Lang>(kv[1], out var l)) Loc.Lang = l;
                     if (kv[0] == "nav" && kv[1] == "collapsed") NavCollapsed = true;
+                    if (kv[0] == "textScale" && int.TryParse(kv[1], out var ts) && (ts == 100 || ts == 115 || ts == 130)) TextScale = ts;
                     if (kv[0] == "window") ParsePlacement(kv[1]);
                     if (kv[0] == "dnsLast")
                     {
@@ -150,6 +151,8 @@ namespace Optimizzzer.App.Shell
         public LiteChoice SavedLite { get; private set; } = LiteChoice.Auto;
         public bool TourDone { get; set; }
         public bool NavCollapsed { get; set; }
+        /// <summary>Text and controls size in percent: 100, 115 or 130.</summary>
+        public int TextScale { get; set; } = 100;
         public Rect? SavedPlacement { get; private set; }
         public bool SavedMaximized { get; private set; }
         /// <summary>The DNS provider last applied from Red y DNS, and when (UTC). Null after going back to the previous DNS.</summary>
@@ -183,6 +186,7 @@ namespace Optimizzzer.App.Shell
                     "theme=" + Theme.Choice, "accent=" + Theme.Accent, "lite=" + Theme.LiteSetting,
                     "lang=" + Loc.Lang, "tour=" + (TourDone ? "done" : "pending"),
                     "nav=" + (NavCollapsed ? "collapsed" : "expanded"),
+                    "textScale=" + TextScale,
                     SavedPlacement.HasValue
                         ? "window=" + string.Join(",", new[] { SavedPlacement.Value.Left, SavedPlacement.Value.Top, SavedPlacement.Value.Width, SavedPlacement.Value.Height }
                             .Select(x => x.ToString("0", CultureInfo.InvariantCulture))) + "," + (SavedMaximized ? "max" : "normal")

@@ -75,6 +75,9 @@ namespace Optimizzzer.App.Pages
                 swatches.Children.Add(rb);
             }
 
+            var scale = Segmented(Loc.S("Tamaño del texto", "Text size"), new[] { (100, "100 %"), (115, "115 %"), (130, "130 %") }, S.TextScale,
+                v => { S.TextScale = v; S.SaveSettings(); W.ApplyTextScale(); });
+
             var lang = Segmented(Loc.S("Idioma", "Language"), new[] { (Lang.Es, "Español"), (Lang.En, "English") }, Loc.Lang, v => { Loc.Lang = v; Changed(); });
 
             var lite = Segmented(Loc.S("Modo ligero", "Lite mode"), new[]
@@ -96,6 +99,7 @@ namespace Optimizzzer.App.Pages
             var body = Ui.Stack(0,
                 Setting(Loc.S("Tema", "Theme"), Loc.S("\"Sistema\" sigue el modo claro u oscuro de Windows.", "\"System\" follows Windows light or dark mode."), theme),
                 Setting(Loc.S("Color de acento", "Accent color"), Loc.S("Ahora: ", "Now: ") + accentName + Loc.S(". Se ajusta solo para que el texto siempre se lea bien.", ". Adjusted automatically so text always stays readable."), swatches),
+                Setting(Loc.S("Tamaño del texto", "Text size"), Loc.S("Agranda letras, iconos y botones juntos, para que nada se corte.", "Enlarges text, icons and buttons together, so nothing is cut off."), scale),
                 Setting(Loc.S("Idioma", "Language"), null, lang),
                 Setting(Loc.S("Modo ligero", "Lite mode"), Loc.S("Quita animaciones y sombras para que vaya fluido en equipos modestos. ", "Removes animations and shadows so it stays smooth on modest PCs. ") + liteState, lite),
                 Setting(Loc.S("Ventana", "Window"), Loc.S("Pantalla completa con F11. El menú se reduce a iconos solo cuando la ventana es estrecha, o siempre si lo contraes.",

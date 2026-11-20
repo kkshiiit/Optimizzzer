@@ -197,7 +197,9 @@ namespace Optimizzzer.App.Shell
         /// </summary>
         public static void Elevate(FrameworkElement e, int level = 1)
         {
-            if (Lite) { e.Effect = null; return; }
+            // One shadow in the whole window (the content surface). Dialogs and toasts sit on a dimmed or quiet
+            // background and use their border instead: cheaper to draw and cleaner to look at.
+            if (Lite || level >= 2) { e.Effect = null; return; }
             e.Effect = new DropShadowEffect
             {
                 BlurRadius = level == 1 ? 18 : 32,

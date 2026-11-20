@@ -172,6 +172,8 @@ namespace Optimizzzer.App.Shell
 
         public static TextBlock Text(string text, double size = 14, bool semibold = false, string brush = "Fg", bool wrap = true)
         {
+            // Small print reads better a half step up (owner request): 12 becomes 13 everywhere.
+            if (size == 12) size = 13;
             var t = new TextBlock
             {
                 Text = text,
@@ -216,7 +218,7 @@ namespace Optimizzzer.App.Shell
             return Stack(0, t, more);
         }
 
-        public static TextBlock H1(string text) { var t = Text(text, 28, true); t.Margin = new Thickness(0, 0, 0, 4); return t; }
+        public static TextBlock H1(string text) { var t = Text(text, 26, true); t.Margin = new Thickness(0, 0, 0, 4); return t; }
         public static TextBlock H2(string text) { var t = Text(text, 20, true); t.Margin = new Thickness(0, 0, 0, 4); return t; }
         public static TextBlock H3(string text) { var t = Text(text, 16, true); return t; }
         public static TextBlock Muted(string text, double size = 14) => Text(text, size, false, "FgMuted");
@@ -312,9 +314,9 @@ namespace Optimizzzer.App.Shell
 
         public static Border Panel(UIElement child, double padding = 24)
         {
-            var b = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(padding), Child = child, BorderThickness = new Thickness(1) };
-            b.SetResourceReference(Border.BackgroundProperty, "Surface");
-            b.SetResourceReference(Border.BorderBrushProperty, "Divider");
+            // A quiet filled area, no outline: sections read as groups without boxes inside boxes.
+            var b = new Border { CornerRadius = new CornerRadius(10), Padding = new Thickness(padding), Child = child };
+            b.SetResourceReference(Border.BackgroundProperty, "SurfaceAlt");
             return b;
         }
 
