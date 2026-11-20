@@ -341,7 +341,7 @@ namespace Optimizzzer.App.Shell
         public static FrameworkElement Chip(string icon, string text, string brush = "FgMuted", string tooltip = null)
         {
             var row = Row(4, Icon(icon, 12, brush), Text(text, 12, false, brush, wrap: false));
-            var b = new Border { Child = row, Padding = new Thickness(8, 2, 8, 2), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 6, 0) };
+            var b = new Border { Child = row, Padding = new Thickness(8, 2, 8, 2), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 6, 0), HorizontalAlignment = HorizontalAlignment.Left };
             b.SetResourceReference(Border.BackgroundProperty, "SurfaceAlt");
             if (tooltip != null) b.ToolTip = tooltip;
             AutomationProperties.SetName(b, text);

@@ -25,6 +25,39 @@ namespace Optimizzzer.App.Pages
         protected override IList<StartupItem> Load() => S.Win.Startup.List();
         protected override bool Matches(StartupItem i, string q) => Has(i.Name, q) || Has(i.Description, q) || Has(i.Publisher, q) || Has(i.Command, q);
 
+        private static readonly System.Text.RegularExpressions.Regex Launcher_ = new System.Text.RegularExpressions.Regex(
+            @"steam|epic ?games|EpicGamesLauncher|discord|riot ?client|RiotClient|\bEA\b|EADesktop|Origin|battle\.net|Battle.net|ubisoft|upc\.exe|GalaxyClient|GOG Galaxy",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+
+        private static bool IsLauncher(StartupItem i) => Launcher_.IsMatch(i.Name ?? "") || Launcher_.IsMatch(i.Command ?? "");
+
+        /// <summary>Game launchers that open with Windows: they cost boot time and memory and update in the background.</summary>
+        protected override FrameworkElement TopBar()
+        {
+            if (Items == null) return null;
+            var on = Items.Where(i => i.Enabled && IsLauncher(i)).ToList();
+            if (on.Count == 0) return null;
+            var text = Loc.S("Arrancan con Windows ", "Starting with Windows: ") + on.Count + Loc.S(" lanzadores de juegos (", " game launchers (") + string.Join(", ", on.Select(i => i.Name)) + Loc.S("). Cada uno alarga el inicio y usa memoria y red en segundo plano. Se siguen abriendo al jugar.", "). Each makes startup longer and uses memory and network in the background. They still open when you play.");
+            var off = Ui.Secondary(Loc.S("No abrirlos con Windows", "Do not open them with Windows"), () =>
+            {
+                try
+                {
+                    foreach (var i in on) { S.Win.Startup.SetEnabled(i, false); i.Enabled = false; }
+                    W.Toast(ToastKind.Success, on.Count + Loc.S(" lanzadores ya no arrancan con Windows.", " launchers no longer start with Windows."));
+                }
+                catch (Exception ex) { W.ShowError(ex.Message); }
+                W.RefreshCurrentIf(this);
+            }, Icons.Gaming);
+            var g = new Grid();
+            g.ColumnDefinitions.Add(new ColumnDefinition());
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            var n = Ui.Notice(Icons.Info, "AccentText", text);
+            g.Children.Add(n);
+            off.Margin = new Thickness(16, 0, 0, 0); off.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(off, 1); g.Children.Add(off);
+            return Ui.Panel(g, 16);
+        }
+
         protected override FrameworkElement RowFor(StartupItem i)
         {
             var sw = new CheckBox { IsChecked = i.Enabled, VerticalAlignment = VerticalAlignment.Top };
@@ -52,7 +85,11 @@ namespace Optimizzzer.App.Pages
                 case StartupSource.UserFolder: origin = Loc.S("Carpeta Inicio, solo tu usuario", "Startup folder, your user only"); break;
                 default: origin = Loc.S("Carpeta Inicio, todos los usuarios", "Startup folder, all users"); break;
             }
-            var info = Ui.Stack(2, Ui.Row(8, Ui.Text(i.Name, 14, true), Ui.Chip(Icons.Startup, Loc.S("Arranca desde: ", "Starts from: ") + origin)), Ui.Muted(who), Ui.Muted(i.Command, 12));
+            var info = Ui.Stack(4,
+                Ui.Row(8, Ui.Text(i.Name, 15, true), IsLauncher(i) ? Ui.Chip(Icons.Gaming, Loc.S("Lanzador de juegos", "Game launcher")) : null),
+                Ui.Muted(who, 13),
+                Ui.Chip(Icons.Startup, Loc.S("Arranca desde: ", "Starts from: ") + origin),
+                Ui.Muted(i.Command, 12));
             var right = Ui.Row(12, state, sw);
             state.VerticalAlignment = VerticalAlignment.Center;
             return CleanupPage.Row(Ui.Icon(Icons.Startup, 16, "FgMuted"), info, right);
@@ -66,6 +103,8 @@ namespace Optimizzzer.App.Pages
         private Show _show = Show.All;
         // Service name -> the open journal id of the start type I set by hand (for "Changed by me" and "Back to original").
         private Dictionary<string, string> _mine = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        private readonly IDictionary<string, (Level Level, string TweakId)> _owners = Levels.ServiceOwners();
+        private Dictionary<string, DateTime> _levelApplied = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
         public ServicesPage(AppState s, MainWindow w) : base(s, w) { }
         public override string Key => "services";
         public override string Title => Loc.S("Servicios", "Services");
@@ -80,6 +119,14 @@ namespace Optimizzzer.App.Pages
                 .Where(h => h.Entry.ResultKind == EntryResult.Applied && !h.Entry.Reverted && h.Entry.TweakId.StartsWith(ManualTweaks.ServicePrefix, StringComparison.Ordinal))
                 .GroupBy(h => h.Entry.TweakId.Split('|')[1], StringComparer.OrdinalIgnoreCase)
                 .ToDictionary(g => g.Key, g => g.First().Entry.TweakId, StringComparer.OrdinalIgnoreCase);
+            // Services a level already changed (and not undone), with the date, to show them in green.
+            var applied = S.Engine.History().Where(h => h.Entry.ResultKind == EntryResult.Applied && !h.Entry.Reverted).ToList();
+            _levelApplied = new Dictionary<string, DateTime>(StringComparer.OrdinalIgnoreCase);
+            foreach (var kv in _owners)
+            {
+                var hit = applied.FirstOrDefault(h => h.Entry.TweakId == kv.Value.TweakId);
+                if (hit.Entry != null && DateTime.TryParse(hit.Entry.AppliedUtc, null, System.Globalization.DateTimeStyles.RoundtripKind, out var d)) _levelApplied[kv.Key] = d.ToLocalTime();
+            }
             return ServiceList.Load(S.Win.Services);
         }
         protected override bool Matches(ServiceInfo i, string q) => Has(i.Name, q) || Has(i.DisplayName, q) || Has(i.Description, q) || Has(i.ImagePath, q);
@@ -128,11 +175,41 @@ namespace Optimizzzer.App.Pages
 
         protected override FrameworkElement RowFor(ServiceInfo i)
         {
-            var info = Ui.Stack(2,
+            // What a person needs to decide: what it is, what we advise, and whether a level changes or changed it.
+            var note = Optimizzzer.Core.Catalog.ServiceGuide.For(i.Name);
+            FrameworkElement levelChip = null;
+            if (_owners.TryGetValue(i.Name, out var owner))
+            {
+                var levelName = Loc.S(Levels.Get(owner.Level).Name);
+                levelChip = _levelApplied.TryGetValue(i.Name, out var when)
+                    ? Ui.Chip(Icons.CheckCircle, Loc.S("Cambiado por el nivel ", "Changed by the ") + levelName + Loc.S(" el ", " level on ") + when.ToString("d"), "Success")
+                    : Ui.Chip(Icons.SpeedMedium, Loc.S("Lo cambia el nivel ", "Changed by the ") + levelName + Loc.S("", " level"), "AccentText");
+            }
+            FrameworkElement advice;
+            if (note == null)
+                advice = Ui.Text(Loc.S("Sin datos de este servicio: búscalo antes de tocarlo.", "No data on this service: look it up before changing it."), 13, false, "FgMuted");
+            else
+            {
+                string text, brush;
+                switch (note.Advice)
+                {
+                    case Optimizzzer.Core.Catalog.ServiceAdvice.Keep: text = Loc.S("Recomendación: déjalo como está.", "Advice: leave it as it is."); brush = "Success"; break;
+                    case Optimizzzer.Core.Catalog.ServiceAdvice.ManualIsFine: text = Loc.S("Recomendación: Manual está bien; arranca solo cuando hace falta.", "Advice: Manual is fine; it starts only when needed."); brush = "AccentText"; break;
+                    default: text = Loc.S("Se puede deshabilitar ", "Can be disabled ") + Loc.S(note.When) + "."; brush = "Moderate"; break;
+                }
+                advice = Ui.Stack(0, Ui.Text(Loc.S(note.What), 13, false, "Fg"), Ui.Text(text, 13, true, brush));
+            }
+            var search = Ui.Subtle(Loc.S("Buscar en internet", "Search the web"), () => Launcher.SearchWeb(i.DisplayName + " " + i.Name), Icons.Web, Loc.S("Buscar en internet qué es ", "Search the web for ") + i.DisplayName);
+            search.Padding = new Thickness(0); search.MinHeight = 28; search.FontSize = 13; search.HorizontalAlignment = HorizontalAlignment.Left;
+            search.SetResourceReference(Control.ForegroundProperty, "AccentText");
+            var info = Ui.Stack(4,
                 Ui.Row(10, Ui.Text(i.DisplayName, 14, true), Ui.Text(i.Running ? Loc.S("En ejecución", "Running") : Loc.S("Detenido", "Stopped"), 12, false, i.Running ? "Success" : "FgMuted", wrap: false),
                     _mine.ContainsKey(i.Name) ? Ui.Chip(Icons.History, Loc.S("Cambiado por ti", "Changed by you"), "AccentText") : null,
                     i.IsThirdParty ? Ui.Chip(Icons.Apps, Loc.S("De otro programa", "From another program")) : null),
-                Ui.Clamped(i.Name + (string.IsNullOrEmpty(i.Description) ? "" : " · " + i.Description)));
+                levelChip,
+                advice,
+                Ui.Clamped(i.Name + (string.IsNullOrEmpty(i.Description) ? "" : " · " + i.Description)),
+                search);
             FrameworkElement right;
             if (i.Protected)
             {
@@ -267,8 +344,17 @@ namespace Optimizzzer.App.Pages
                 catch (Exception ex) { sw.IsChecked = !on; W.ShowError(ex.Message); }
             };
             var last = i.LastRun.HasValue ? Loc.S("Última ejecución: ", "Last run: ") + i.LastRun.Value.ToString("g") : Loc.S("Nunca se ha ejecutado", "Never run");
-            var info = Ui.Stack(2, Ui.Text(i.Name, 14, true), Ui.Muted(i.Folder + " · " + last, 12),
-                string.IsNullOrWhiteSpace(i.Description) ? null : Ui.Clamped(i.Description));
+            var note = Optimizzzer.Core.Catalog.TaskGuide.For(i.Path);
+            FrameworkElement impact = null;
+            if (note != null)
+                impact = Ui.Stack(0,
+                    Ui.Text(Loc.S(note.What) + (note.Estimated ? Loc.S(" (estimado por el nombre)", " (estimated from the name)") : ""), 13, false, "Fg"),
+                    Ui.Text(Loc.S("Si la desactivas: ", "If you turn it off: ") + Loc.S(note.IfOff), 13, true, note.IfOff.Es.StartsWith("No la desactives") ? "Advanced" : "Moderate"));
+            var search = Ui.Subtle(Loc.S("Buscar en internet", "Search the web"), () => Launcher.SearchWeb(i.Name + " scheduled task"), Icons.Web, Loc.S("Buscar en internet qué es ", "Search the web for ") + i.Name);
+            search.Padding = new Thickness(0); search.MinHeight = 28; search.FontSize = 13; search.HorizontalAlignment = HorizontalAlignment.Left;
+            search.SetResourceReference(Control.ForegroundProperty, "AccentText");
+            var info = Ui.Stack(4, Ui.Text(i.Name, 14, true), Ui.Muted(i.Folder + " · " + last, 12),
+                string.IsNullOrWhiteSpace(i.Description) ? null : Ui.Clamped(i.Description), impact, search);
             return CleanupPage.Row(pick, info, sw);
         }
     }
@@ -326,28 +412,33 @@ namespace Optimizzzer.App.Pages
             }
         }
 
-        protected override FrameworkElement Toolbar()
+        protected override FrameworkElement TopBar()
         {
             int Count(Tab t) => Items == null ? 0 : Filtered2(t).Count();
             var tabs = new StackPanel { Orientation = Orientation.Horizontal };
             AutomationProperties.SetName(tabs, Loc.S("Tipo", "Type"));
             foreach (var (t, label) in new[] { (Tab.Programs, Loc.S("Programas", "Programs")), (Tab.Games, Loc.S("Juegos", "Games")), (Tab.Store, Loc.S("Apps de la Store", "Store apps")) })
             {
-                var rb = new RadioButton { GroupName = "appsTab", Content = label + " (" + Count(t) + ")", IsChecked = _tab == t, Margin = new Thickness(0, 0, 4, 0) };
+                var rb = new RadioButton { GroupName = "appsTab", Content = label + "  " + Count(t), IsChecked = _tab == t, Margin = new Thickness(0, 0, 8, 0), MinWidth = 120 };
                 rb.SetResourceReference(FrameworkElement.StyleProperty, "Segment");
                 var tab = t;
                 rb.Checked += (_, __) => { _tab = tab; W.RefreshCurrentIf(this); };
                 tabs.Children.Add(rb);
             }
+            return tabs;
+        }
+
+        protected override FrameworkElement Toolbar()
+        {
+            if (_tab == Tab.Games) return null;
             var cb = new CheckBox
             {
                 Content = _tab == Tab.Store ? Loc.S("Mostrar también las del sistema (bloqueadas)", "Also show system apps (locked)") : Loc.S("Mostrar también componentes y actualizaciones", "Also show components and updates"),
-                IsChecked = _showSystem, Margin = new Thickness(16, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+                IsChecked = _showSystem, VerticalAlignment = VerticalAlignment.Center,
             };
             cb.Checked += (_, __) => { _showSystem = true; Refill(); };
             cb.Unchecked += (_, __) => { _showSystem = false; Refill(); };
-            if (_tab == Tab.Games) return tabs;
-            return Ui.Row(0, tabs, cb);
+            return cb;
         }
 
         private IEnumerable<AppEntry> Filtered2(Tab t)
@@ -388,13 +479,62 @@ namespace Optimizzzer.App.Pages
                 p.InstallDate.HasValue ? Loc.S("instalado el ", "installed ") + p.InstallDate.Value.ToString("d") : null,
             }.Where(x => !string.IsNullOrWhiteSpace(x));
             var title = Ui.Row(8, Ui.Text(p.Name, 14, true, "Fg", wrap: false), p.Platform != null ? Ui.Chip(Icons.Gaming, p.Platform) : null);
-            var info = Ui.Stack(2, title, Ui.Muted(string.Join(" · ", facts), 12));
-            var cb = new CheckBox { IsChecked = _selected.Contains(p.Key), VerticalAlignment = VerticalAlignment.Center, Content = info };
-            AutomationProperties.SetName(cb, p.Name);
+            var info = Ui.Stack(3, title, Ui.Muted(string.Join(" · ", facts), 13));
+            info.VerticalAlignment = VerticalAlignment.Center;
+
+            var cb = new CheckBox { IsChecked = _selected.Contains(p.Key), VerticalAlignment = VerticalAlignment.Center };
+            AutomationProperties.SetName(cb, Loc.S("Elegir ", "Pick ") + p.Name);
             cb.Checked += (_, __) => { _selected.Add(p.Key); UpdatePrimary(); };
             cb.Unchecked += (_, __) => { _selected.Remove(p.Key); UpdatePrimary(); };
             if (string.IsNullOrWhiteSpace(p.UninstallString) && string.IsNullOrWhiteSpace(p.QuietUninstallString)) cb.IsEnabled = false;
-            return CleanupPage.Row(Ui.Icon(p.IsGame ? Icons.Gaming : Icons.Apps, 16, "FgMuted"), cb, null);
+
+            // The program's own icon, loaded in the background; a generic one meanwhile.
+            var iconHost = new ContentControl { Width = 32, Height = 32, Focusable = false, Content = Ui.Icon(p.IsGame ? Icons.Gaming : Icons.Apps, 20, "FgMuted"), VerticalAlignment = VerticalAlignment.Center };
+            _ = ProgramIcons.GetAsync(p).ContinueWith(t =>
+            {
+                if (t.Result != null) iconHost.Dispatcher.BeginInvoke(new Action(() => iconHost.Content = new Image { Source = t.Result, Width = 32, Height = 32 }));
+            });
+
+            var web = Ui.Button("", "SubtleButton", () => Launcher.SearchWeb(p.Name), Icons.Web, Loc.S("Buscar en internet qué es ", "Search the web for ") + p.Name);
+            web.Width = 40; web.ToolTip = Loc.S("Buscar en internet qué es", "Search the web for what this is");
+            var more = Ui.Button("", "SubtleButton", () => ShowDetails(p), Icons.Info, Loc.S("Detalles de ", "Details of ") + p.Name);
+            more.Width = 40; more.ToolTip = Loc.S("Detalles", "Details");
+
+            var g = new Grid { MinHeight = 56 };
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(36) });
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(48) });
+            g.ColumnDefinitions.Add(new ColumnDefinition());
+            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g.Children.Add(cb);
+            Grid.SetColumn(iconHost, 1); g.Children.Add(iconHost);
+            Grid.SetColumn(info, 2); g.Children.Add(info);
+            var actions = Ui.Row(4, web, more);
+            actions.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(actions, 3); g.Children.Add(actions);
+            var row = new Border { Child = g, Padding = new Thickness(4, 8, 4, 8), BorderThickness = new Thickness(0, 0, 0, 1) };
+            row.SetResourceReference(Border.BorderBrushProperty, "Divider");
+            return row;
+        }
+
+        /// <summary>Everything about one program, with "search the web", "open folder" and "uninstall".</summary>
+        private void ShowDetails(InstalledProgram p)
+        {
+            var kv = Ui.KeyValues(
+                (Loc.S("Editor", "Publisher"), p.Publisher),
+                (Loc.S("Versión", "Version"), p.Version),
+                (Loc.S("Tamaño", "Size"), p.SizeBytes > 0 ? Loc.Size(p.SizeBytes) : null),
+                (Loc.S("Instalado", "Installed"), p.InstallDate?.ToString("d")),
+                (Loc.S("Tipo", "Type"), p.Platform != null ? Loc.S("Juego de ", "Game from ") + p.Platform : Loc.S("Programa", "Program")),
+                (Loc.S("Carpeta", "Folder"), p.InstallLocation),
+                (Loc.S("Desinstalador", "Uninstaller"), p.QuietUninstallString ?? p.UninstallString));
+            var buttons = new WrapPanel { HorizontalAlignment = HorizontalAlignment.Right };
+            void Add(Button b) { b.Margin = new Thickness(8, 0, 0, 0); buttons.Children.Add(b); }
+            Add(Ui.Secondary(Loc.S("Buscar en internet qué es", "Search the web"), () => Launcher.SearchWeb(p.Name), Icons.Web));
+            if (!string.IsNullOrWhiteSpace(p.InstallLocation) && System.IO.Directory.Exists(p.InstallLocation))
+                Add(Ui.Secondary(Loc.S("Abrir carpeta", "Open folder"), () => Launcher.Open(p.InstallLocation), Icons.Folder));
+            Add(Ui.Primary(Loc.S("Desinstalar", "Uninstall"), () => { W.CloseOverlay(); _selected.Clear(); _selected.Add(p.Key); _ = UninstallSelectedAsync(); }, Icons.Cleanup));
+            var head = Ui.Row(12, new Image { Source = ProgramIcons.Get(p), Width = 32, Height = 32 }, Ui.H2(p.Name));
+            W.ShowOverlay(MainWindow.Sheet(head, kv, buttons), W.CloseOverlay, 620);
         }
 
         private FrameworkElement StoreRow(AppxInfo i)

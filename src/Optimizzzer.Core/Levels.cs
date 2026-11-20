@@ -102,6 +102,21 @@ namespace Optimizzzer.Core
 
         public static LevelInfo Get(Level l) => All.First(x => x.Level == l);
 
+        /// <summary>For each service a level changes: the lowest level that changes it, and the tweak that does.</summary>
+        public static IDictionary<string, (Level Level, string TweakId)> ServiceOwners()
+        {
+            var map = new Dictionary<string, (Level, string)>(StringComparer.OrdinalIgnoreCase);
+            foreach (var l in All)
+                foreach (var id in l.Adds)
+                {
+                    var t = Catalog.TweakCatalog.Find(id);
+                    if (t == null) continue;
+                    foreach (var a in t.Actions.Select(x => x is OsOnlyAction o ? o.Inner : x).OfType<ServiceStartAction>())
+                        if (!map.ContainsKey(a.Service)) map[a.Service] = (l.Level, t.Id);
+                }
+            return map;
+        }
+
         /// <summary>Every tweak id up to and including this level.</summary>
         public static IEnumerable<string> IdsUpTo(Level level) => All.Where(l => l.Level <= level).SelectMany(l => l.Adds);
 
