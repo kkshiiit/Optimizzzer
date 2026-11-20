@@ -59,7 +59,7 @@ Quitar Copilot, Xbox, Edge o la Store, desactivar Defender y pausar Windows Upda
 
 ## Descargar
 
-Descarga `Optimizzzer.exe` desde la sección **Releases** del repositorio (versión actual: v1.2.0). Las notas de cada versión incluyen el hash SHA-256 del ejecutable para comprobar que no se ha modificado.
+Descarga `Optimizzzer.exe` desde la sección **Releases** del repositorio (versión actual: v1.3.0). Las notas de cada versión incluyen el hash SHA-256 del ejecutable para comprobar que no se ha modificado.
 
 Windows SmartScreen avisará al abrirlo porque el exe no está firmado. Pulsa "Más información" y luego "Ejecutar de todas formas".
 
