@@ -28,6 +28,8 @@ Cada nivel incluye los anteriores. Al elegirlo ves en lenguaje simple qué va a 
 - **Selecciones portátiles:** exporta e importa archivos `.optz` para repetir la configuración en otro PC.
 - **Apariencia:** tema oscuro de serie, con claro o el de Windows a un clic, y 5 colores de acento.
 - **Modo ligero automático:** en equipos modestos se quitan las animaciones y las sombras para que vaya fluido.
+- **Ventana adaptable:** entra en cualquier pantalla, con el menú reducido a iconos en ventanas estrechas. F11 la pone en pantalla completa.
+- **Salud del equipo en Inicio:** espacio libre, días sin reiniciar, último punto de restauración y ajustes revertidos, todo medido.
 
 **Personalizar (paso a paso)**
 1. Análisis: lee tu equipo y el estado real de cada ajuste. Solo lee.
@@ -38,15 +40,16 @@ Cada nivel incluye los anteriores. Al elegirlo ves en lenguaje simple qué va a 
 6. Resultado: mediciones antes y después tomadas en tu equipo, e informe HTML.
 
 **Herramientas**
-- Limpieza: calcula el espacio a liberar antes de borrar. Nunca fuerza archivos en uso.
-- Reparación: DISM, SFC, red, Windows Update, Microsoft Store y caché de iconos, con la salida visible.
-- Red y DNS: mide la velocidad real de cada DNS desde tu conexión y permite volver al anterior.
-- Programas de inicio, Servicios, Tareas programadas y Apps instaladas.
+- Limpieza: calcula el espacio a liberar antes de borrar, incluida la caché de Edge, Chrome y Firefox. Cada elemento explica qué es y si es seguro. "Qué ocupa más" muestra las 20 carpetas más grandes (solo mirar). Nunca fuerza archivos en uso.
+- Programas y apps: todos los programas, juegos (Steam, Epic, Riot, EA, Ubisoft, Battle.net, GOG, Xbox) y apps de la Store. Desinstala varios a la vez y luego busca los restos: carpetas, claves del registro, accesos directos, tareas y servicios. Los archivos van a la Papelera y las claves se guardan en un `.reg` antes de borrarlas.
+- Reparación: DISM, SFC, comprobación de disco, red, Firewall, Windows Update, Microsoft Store y caché de iconos, con la salida visible y guardable. Cada una dice cuándo usarla y qué hace exactamente.
+- Red y DNS: dice qué DNS usas por nombre, mide la velocidad real de cada uno, permite volver al anterior y restablecer el adaptador.
+- Programas de inicio (con su origen), Servicios (filtros "de otros programas" y "cambiados por mí", y volver al original) y Tareas programadas (desactivar varias a la vez).
 
 **Seguimiento**
 - Historial: deshacer cada cambio por separado o una sesión entera.
 - Cambios revertidos: detecta qué ajustes ha deshecho una actualización de Windows y los vuelve a aplicar.
-- Mediciones: memoria en uso, procesos, servicios, programas de inicio, espacio libre y duración del arranque (del registro de eventos de Windows).
+- Mediciones: arranque y apagado (del registro de eventos de Windows), CPU, memoria en uso y comprometida, procesos, hilos, servicios, programas de inicio, espacio libre por disco y carpeta temporal. Con gráfico por métrica, exportar a CSV y una medición automática tras el próximo reinicio.
 
 ## Qué no hace (a propósito)
 
@@ -54,7 +57,7 @@ No aplica ajustes placebo ni peligrosos. La lista y los motivos están en [docs/
 
 ## Descargar
 
-Descarga `Optimizzzer.exe` desde la sección **Releases** del repositorio (versión actual: v1.1.1). Las notas de cada versión incluyen el hash SHA-256 del ejecutable para comprobar que no se ha modificado.
+Descarga `Optimizzzer.exe` desde la sección **Releases** del repositorio (versión actual: v1.2.0). Las notas de cada versión incluyen el hash SHA-256 del ejecutable para comprobar que no se ha modificado.
 
 Windows SmartScreen avisará al abrirlo porque el exe no está firmado. Pulsa "Más información" y luego "Ejecutar de todas formas".
 
@@ -70,6 +73,7 @@ Optimizzzer.exe -Profile Gaming -DryRun
 Optimizzzer.exe -Profile Privacy -Silent -Report informe.html
 Optimizzzer.exe -Apply privacy.telemetry,ui.fileExtensions -Silent
 Optimizzzer.exe -Undo all
+Optimizzzer.exe -Measure antes-de-jugar
 ```
 
 `-Help` muestra todas las opciones.
@@ -83,7 +87,7 @@ Optimizzzer.exe -Undo all
 
 Cada cambio de código se verifica automáticamente en dos Windows reales de GitHub: **Windows 11 Enterprise** (cliente, 10.0.26200) y **Windows Server 2025** (misma base que Windows 11 24H2):
 
-- 52 tests del núcleo, entre ellos "aplicar todo y deshacer deja el estado idéntico".
+- 63 tests del núcleo, entre ellos "aplicar todo y deshacer deja el estado idéntico".
 - Interfaz: primer análisis como en un arranque normal, todas las pantallas en tema claro y oscuro, en español e inglés, y aplicar y deshacer desde el asistente. Se guardan capturas en `docs/screenshots/`.
 - Herramientas:
   - Punto de restauración creado y comprobado en la lista de Windows 11.
@@ -92,6 +96,8 @@ Cada cambio de código se verifica automáticamente en dos Windows reales de Git
   - Quitar una app de la Store.
   - Reparación de red y DISM.
   - Programas de inicio, servicios, tareas e informe HTML.
+  - Desinstalar un programa de prueba, encontrar sus restos (carpeta, datos y clave) y borrarlos con copia `.reg`.
+- Ventana: "Volver a analizar" desde Personalizar, pantalla completa, y la hoja del nivel Máximo a 1280x720, 1024x640 y 800x600 con el botón Aplicar siempre visible.
 - Ida y vuelta por línea de comandos: aplica 18 ajustes de registro, servicios, tareas programadas, DirectX y plan de energía. Después comprueba que quedan aplicados, lo deshace todo y verifica que el análisis final es idéntico al inicial.
 
 GitHub ya no ofrece máquinas con Windows 10, así que Windows 10 no se prueba automáticamente. Si lo usas en Windows 10, haz antes una pasada en una máquina virtual:

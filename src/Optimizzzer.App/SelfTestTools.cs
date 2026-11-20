@@ -109,6 +109,7 @@ namespace Optimizzzer.App
                     var now = win.Dns.Adapters().First(x => x.Id == a.Id);
                     log("after apply: " + string.Join(",", now.Servers));
                     if (!now.Servers.Contains("1.1.1.1")) throw new Exception("1.1.1.1 was not set");
+                    if (DnsCatalog.Match(now.Servers)?.Id != "cloudflare") throw new Exception("the page would not show Cloudflare as in use");
                     var lat = DnsBenchmark.MeasureAsync(cloudflare).GetAwaiter().GetResult();
                     log("cloudflare median " + (lat.MedianMs?.ToString("0.0") ?? "no answer") + " ms, failures " + lat.Failures);
                 }
@@ -180,6 +181,49 @@ namespace Optimizzzer.App
                 log(services.Count + " services (" + services.Count(x => x.Protected) + " locked), " + tasks.Count + " scheduled tasks");
                 if (services.Count < 50 || !services.Any(x => x.Name == "RpcSs" && x.Protected)) throw new Exception("service list looks wrong");
                 if (tasks.Count < 20) throw new Exception("task list looks wrong");
+            });
+
+            check("uninstall a program and clean its leftovers", () =>
+            {
+                const string name = "OptzSelfTest App";
+                var unKey = @"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\OptzSelfTest";
+                var folder = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles), name);
+                var data = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), name);
+                Directory.CreateDirectory(folder);
+                File.WriteAllText(Path.Combine(folder, "app.txt"), "self-test");
+                Directory.CreateDirectory(data);
+                File.WriteAllText(Path.Combine(data, "settings.txt"), "self-test");
+                using (var k = Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.CurrentUser, Microsoft.Win32.RegistryView.Default).CreateSubKey(@"Software\" + name))
+                    k.SetValue("x", 1);
+                // A program whose uninstaller only removes its own Uninstall entry, like many real ones that leave files behind.
+                var removeEntry = "cmd.exe /c reg delete \"HKLM\\" + unKey + "\" /f";
+                using (var k = Microsoft.Win32.RegistryKey.OpenBaseKey(Microsoft.Win32.RegistryHive.LocalMachine, Microsoft.Win32.RegistryView.Registry64).CreateSubKey(unKey))
+                {
+                    k.SetValue("DisplayName", name);
+                    k.SetValue("Publisher", "Optimizzzer Tests");
+                    k.SetValue("InstallLocation", folder);
+                    k.SetValue("UninstallString", removeEntry);
+                    k.SetValue("QuietUninstallString", removeEntry);
+                }
+                var p = win.Programs.List().FirstOrDefault(x => x.Name == name);
+                if (p == null) throw new Exception("the test program is not listed");
+                if (p.IsGame || ProgramClassifier.IsSystemLike(p)) throw new Exception("the test program is misclassified");
+                var r = win.Programs.Uninstall(p, true, System.Threading.CancellationToken.None);
+                log("uninstall: removed " + r.Removed + ", silent " + r.Silent + ", exit " + r.ExitCode);
+                if (!r.Removed) throw new Exception("uninstall did not remove the entry");
+                var left = win.Programs.FindLeftovers(p);
+                foreach (var l in left) log("leftover " + l.Confidence + " " + l.Kind + " " + l.Path);
+                if (!left.Any(l => l.Kind == LeftoverKind.Folder && l.Path.Equals(folder, StringComparison.OrdinalIgnoreCase) && l.Confidence == Confidence.High)) throw new Exception("install folder not found as leftover");
+                if (!left.Any(l => l.Path.Equals(data, StringComparison.OrdinalIgnoreCase))) throw new Exception("AppData folder not found as leftover");
+                if (!left.Any(l => l.Kind == LeftoverKind.RegistryKey && l.Path.EndsWith(name))) throw new Exception("settings key not found as leftover");
+                if (left.Any(l => l.Path.IndexOf(@"\Windows", StringComparison.OrdinalIgnoreCase) >= 0 && l.Kind == LeftoverKind.Folder)) throw new Exception("a Windows folder was proposed");
+                var mine = left.Where(l => l.Path.IndexOf("OptzSelfTest", StringComparison.OrdinalIgnoreCase) >= 0).ToList();
+                var results = win.Programs.Delete(mine);
+                foreach (var x in results.Where(x => !x.Ok)) log("delete failed: " + x.Item.Path + ": " + x.Error);
+                if (results.Any(x => !x.Ok)) throw new Exception("some leftovers could not be deleted");
+                if (Directory.Exists(folder) || Directory.Exists(data)) throw new Exception("leftover folders still exist");
+                if (!Directory.GetFiles(win.Programs.BackupFolder, "*.reg").Any()) throw new Exception("no .reg backup was written");
+                log("leftovers deleted: " + results.Count + "; registry backup in " + win.Programs.BackupFolder);
             });
 
             check("html report file", () =>

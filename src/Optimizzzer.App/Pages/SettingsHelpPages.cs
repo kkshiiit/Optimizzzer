@@ -98,6 +98,9 @@ namespace Optimizzzer.App.Pages
                 Setting(Loc.S("Color de acento", "Accent color"), Loc.S("Ahora: ", "Now: ") + accentName + Loc.S(". Se ajusta solo para que el texto siempre se lea bien.", ". Adjusted automatically so text always stays readable."), swatches),
                 Setting(Loc.S("Idioma", "Language"), null, lang),
                 Setting(Loc.S("Modo ligero", "Lite mode"), Loc.S("Quita animaciones y sombras para que vaya fluido en equipos modestos. ", "Removes animations and shadows so it stays smooth on modest PCs. ") + liteState, lite),
+                Setting(Loc.S("Ventana", "Window"), Loc.S("Pantalla completa con F11. El menú se reduce a iconos solo cuando la ventana es estrecha, o siempre si lo contraes.",
+                    "Full screen with F11. The menu shrinks to icons when the window is narrow, or always if you collapse it."),
+                    Ui.Row(8, Ui.Secondary(Loc.S("Contraer menú", "Collapse menu"), W.ToggleNavCollapsed, Icons.Menu), Ui.Secondary(Loc.S("Pantalla completa", "Full screen"), W.ToggleFullScreen, Icons.FullScreen))),
                 Setting(Loc.S("Recorrido de bienvenida", "Welcome tour"), Loc.S("Tres pasos que explican cómo funciona.", "Three steps that explain how it works."), tour),
                 Setting(Loc.S("Datos de Optimizzzer", "Optimizzzer data"), Loc.S("Historial para deshacer, mediciones y estos ajustes, en ", "Undo history, measurements and these settings, in ") + S.Win.DataDir, data),
                 Ui.Muted("Optimizzzer " + version.Major + "." + version.Minor + "." + version.Build + " · MIT", 12));
@@ -159,6 +162,7 @@ namespace Optimizzzer.App.Pages
                 Term("Ctrl + Shift + H", Loc.S("Ir a Inicio", "Go to Home")),
                 Term("Ctrl + ,", Loc.S("Ajustes", "Settings")),
                 Term("F1", Loc.S("Esta ayuda", "This help")),
+                Term("F11", Loc.S("Pantalla completa (F11 o Esc para salir)", "Full screen (F11 or Esc to leave)")),
                 Term("Esc", Loc.S("Cerrar el diálogo abierto", "Close the open dialog")),
                 Term("Tab / Shift + Tab", Loc.S("Moverse entre controles", "Move between controls")));
 

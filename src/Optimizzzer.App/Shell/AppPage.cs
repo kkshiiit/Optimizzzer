@@ -29,7 +29,7 @@ namespace Optimizzzer.App.Shell
         /// <summary>Standard page: heading, optional intro line, scrollable body, fixed footer with actions.</summary>
         protected Grid Frame(string intro, UIElement body, UIElement footer = null, bool scroll = true)
         {
-            var g = new Grid { Margin = new Thickness(32, 28, 32, 24) };
+            var g = new Grid { Margin = MainWindow.Compact ? new Thickness(20, 16, 20, 16) : new Thickness(32, 28, 32, 24) };
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             g.RowDefinitions.Add(new RowDefinition());
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });

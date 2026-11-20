@@ -1,3 +1,16 @@
+**Novedades en 1.2**
+- La ventana se adapta a cualquier pantalla: ya no se esconde la barra de título en portátiles de 768 px, F11 pone pantalla completa y el menú se reduce a iconos en ventanas estrechas.
+- Las hojas de cada nivel nunca se cortan: el botón Aplicar queda siempre visible y la lista se desplaza.
+- Arreglado: "Volver a analizar" en Personalizar se quedaba en "Leyendo la información del equipo".
+- Aviso claro de que el análisis puede tardar varios minutos según el equipo.
+- Programas y apps: programas, juegos y apps de la Store; desinstalación por lotes y limpieza de restos (a la Papelera, con copia del registro).
+- Red y DNS: dice qué DNS está en uso y cuál aplicaste la última vez; IP y router; restablecer adaptador; cómo activar DNS cifrado en Windows 11.
+- Mediciones completas: CPU, memoria comprometida, hilos, handles, apagado, discos y carpeta temporal, con gráfico, CSV y medición tras reiniciar.
+- Salud del equipo en Inicio.
+- Limpieza: caché de navegadores, "qué ocupa más" y explicación de cada elemento. Reparación: comprobación de disco, restablecer Firewall, cuándo usar cada una y guardar la salida.
+- Servicios: filtros "de otros programas" y "cambiados por mí", y volver al original. Tareas: desactivar varias a la vez. Programas de inicio: de dónde arranca cada uno.
+- Menú reordenado: Inicio, Personalizar y Mediciones arriba; Limpiar y reparar; Sistema; Seguimiento.
+
 **Novedades en 1.1**
 - Inicio con 4 niveles en 1 clic: Rápido, Equilibrado, Juegos y Máximo rendimiento. Cada uno incluye los anteriores. Antes de aplicar ves qué ganas, qué pierdes, qué apps se quitan y si hay que reiniciar. Máximo pide doble confirmación.
 - Buscador Ctrl+K, Ayuda con glosario, recorrido de bienvenida y avisos claros de éxito y error.

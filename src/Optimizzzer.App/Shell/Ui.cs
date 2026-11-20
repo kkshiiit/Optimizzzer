@@ -46,6 +46,9 @@ namespace Optimizzzer.App.Shell
         public const string Help = "\uE897";
         public const string Export = "\uEDE1";
         public const string More = "\uE712";
+        public const string FullScreen = "\uE740";
+        public const string BackToWindow = "\uE73F";
+        public const string Menu = "\uE700";       // Collapse or expand the navigation menu
         public const string Import = "\uE8B5";
         public const string Glossary = "\uE82D";    // Dictionary
         public const string Keyboard = "\uE765";
@@ -368,6 +371,38 @@ namespace Optimizzzer.App.Shell
                 string.IsNullOrEmpty(detail) ? null : Muted(detail, 12),
                 retry == null ? null : Secondary(Loc.S("Intentar de nuevo", "Try again"), retry, Icons.Restart));
         }
+
+        /// <summary>A "More information" link that unfolds the longer explanation in place.</summary>
+        public static FrameworkElement MoreInfo(params (string Heading, string Body)[] parts)
+        {
+            var body = new StackPanel { Visibility = Visibility.Collapsed, Margin = new Thickness(0, 4, 0, 4), MaxWidth = 760, HorizontalAlignment = HorizontalAlignment.Left };
+            foreach (var (h, t) in parts)
+            {
+                if (string.IsNullOrEmpty(t)) continue;
+                if (!string.IsNullOrEmpty(h)) body.Children.Add(Text(h, 12, true, "Fg"));
+                var tb = Muted(t, 12);
+                tb.Margin = new Thickness(0, 0, 0, 6);
+                body.Children.Add(tb);
+            }
+            var more = Button(Loc.S("Más información", "More information"), "SubtleButton", null, Icons.ChevronDown);
+            more.MinHeight = 28;
+            more.Padding = new Thickness(0);
+            more.FontSize = 12;
+            more.HorizontalAlignment = HorizontalAlignment.Left;
+            more.SetResourceReference(Control.ForegroundProperty, "AccentText");
+            more.Click += (_, __) =>
+            {
+                bool open = body.Visibility == Visibility.Visible;
+                body.Visibility = open ? Visibility.Collapsed : Visibility.Visible;
+                AutomationProperties.SetName(more, open ? Loc.S("Más información", "More information") : Loc.S("Menos información", "Less information"));
+            };
+            return Stack(0, more, body);
+        }
+
+        /// <summary>The scan reads every tweak's real state, so on slow PCs it takes minutes: say so up front.</summary>
+        public static FrameworkElement ScanDurationNote() => Notice(Icons.Stopwatch, "Moderate", Loc.S(
+            "El análisis puede tardar varios minutos según tu equipo. Mientras tanto puedes usar las herramientas del menú.",
+            "The scan can take a few minutes depending on your PC. You can use the tools in the menu meanwhile."));
 
         public static FrameworkElement Empty(string text) => Notice(Icons.Info, "FgMuted", text);
 

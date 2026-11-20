@@ -20,6 +20,7 @@ namespace Optimizzzer.Windows
             Services = new WinServices(Registry, Process);
             Tasks = new WinTasks();
             Appx = new WinAppx(Process);
+            Programs = new WinPrograms(Process, DataDir);
             Startup = new StartupManager(Registry);
             Cleanup = new WinCleanup(Process);
             Dns = new WinDns(Process, Registry, DataDir);
@@ -34,6 +35,7 @@ namespace Optimizzzer.Windows
         public WinServices Services { get; }
         public WinTasks Tasks { get; }
         public WinAppx Appx { get; }
+        public WinPrograms Programs { get; }
         public StartupManager Startup { get; }
         public WinCleanup Cleanup { get; }
         public WinDns Dns { get; }

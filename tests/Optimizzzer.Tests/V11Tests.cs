@@ -331,4 +331,17 @@ namespace Optimizzzer.Tests
             Assert.All(wu.CleanupSteps, s => Assert.False(s.TolerateExitCode));
         }
     }
+
+    public class V12Tests
+    {
+        [Fact]
+        public void Dns_match_names_the_provider_in_use()
+        {
+            Assert.Equal("cloudflare", DnsCatalog.Match(new[] { "2606:4700:4700::1111", "1.1.1.1", "1.0.0.1" }).Id);
+            Assert.Equal("cloudflareFamily", DnsCatalog.Match(new[] { "1.1.1.3", "1.0.0.3" }).Id);
+            Assert.Null(DnsCatalog.Match(new[] { "192.168.1.1" }));
+            Assert.Null(DnsCatalog.Match(new[] { "1.1.1.1" }));
+            Assert.Null(DnsCatalog.Match(new string[0]));
+        }
+    }
 }

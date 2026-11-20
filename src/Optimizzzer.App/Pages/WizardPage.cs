@@ -129,7 +129,7 @@ namespace Optimizzzer.App.Pages
 
         private Grid StepFrame(string heading, string intro, UIElement body, UIElement footer, bool scroll = true)
         {
-            var g = new Grid { Margin = new Thickness(32, 24, 32, 24) };
+            var g = new Grid { Margin = MainWindow.Compact ? new Thickness(20, 16, 20, 16) : new Thickness(32, 24, 32, 24) };
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             g.RowDefinitions.Add(new RowDefinition());
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
@@ -178,14 +178,21 @@ namespace Optimizzzer.App.Pages
             return t;
         }
 
+        /// <summary>Self-test only: true while the scan step shows the loading view.</summary>
+        public bool ShowsScanLoadingForTest { get; private set; }
+
+        /// <summary>Self-test only: the same call as the "Scan again" button.</summary>
+        public Task RescanForTest() => ScanAsync(true);
+
         private FrameworkElement BuildScan()
         {
-            if (S.Scanning || (S.ScanResults == null && S.ScanError == null))
+            ShowsScanLoadingForTest = S.Scanning || (S.ScanResults == null && S.ScanError == null);
+            if (ShowsScanLoadingForTest)
             {
                 var (view, update) = Ui.Loading(Loc.S("Leyendo la información del equipo…", "Reading PC information…"));
                 _scanProgress = update;
                 return StepFrame(Loc.S("Analizando tu equipo", "Scanning your PC"),
-                    Loc.S("Solo se lee. No se cambia nada hasta el paso Aplicar.", "Read only. Nothing changes until the Apply step."), view, null);
+                    Loc.S("Solo se lee. No se cambia nada hasta el paso Aplicar.", "Read only. Nothing changes until the Apply step."), Ui.Stack(16, view, Ui.ScanDurationNote()), null);
             }
             if (S.ScanError != null)
             {
@@ -222,7 +229,9 @@ namespace Optimizzzer.App.Pages
                 "Antes de aplicar se crea un punto de restauración y se guarda el valor anterior de cada cambio, así que podrás deshacerlos uno a uno desde Historial.",
                 "Before applying, a restore point is created and the previous value of every change is saved, so you can undo them one by one from History."));
 
-            var body = Ui.Stack(16, pc, status, safety);
+            var again = Ui.Muted(Loc.S("\"Volver a analizar\" lee de nuevo todo el equipo y puede tardar varios minutos según tu equipo.",
+                "\"Scan again\" reads the whole PC again and can take a few minutes depending on your PC."), 12);
+            var body = Ui.Stack(16, pc, status, safety, again);
             var footer = Footer(
                 Ui.Secondary(Loc.S("Volver a analizar", "Scan again"), () => _ = ScanAsync(true), Icons.Restart),
                 Ui.Primary(Loc.S("Elegir un perfil", "Choose a profile"), () => GoTo(Step.Profile)));
@@ -367,7 +376,9 @@ namespace Optimizzzer.App.Pages
                 cnt.VerticalAlignment = VerticalAlignment.Center;
                 Grid.SetColumn(tx, 1); Grid.SetColumn(cnt, 2);
                 g.Children.Add(ic); g.Children.Add(tx); g.Children.Add(cnt);
-                var b = new Button { Content = g, Tag = _category == cat ? "current" : null, Margin = new Thickness(0, 1, 0, 1) };
+                // Narrow window: icons only, the name in the tooltip.
+                if (MainWindow.Compact) { tx.Visibility = Visibility.Collapsed; cnt.Visibility = Visibility.Collapsed; }
+                var b = new Button { Content = g, Tag = _category == cat ? "current" : null, Margin = new Thickness(0, 1, 0, 1), ToolTip = MainWindow.Compact ? text : null };
                 b.SetResourceReference(FrameworkElement.StyleProperty, "NavButton");
                 AutomationProperties.SetName(b, text);
                 b.Click += (_, __) =>
@@ -420,7 +431,7 @@ namespace Optimizzzer.App.Pages
             toolbar.Children.Add(more);
 
             var main = new Grid();
-            main.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
+            main.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(MainWindow.Compact ? 56 : 240) });
             main.ColumnDefinitions.Add(new ColumnDefinition());
             var railScroll = Ui.Scroll(rail);
             railScroll.Margin = new Thickness(0, 0, 16, 0);
@@ -711,11 +722,12 @@ namespace Optimizzzer.App.Pages
             FrameworkElement measures = null;
             if (S.Before != null && S.After != null)
             {
-                var rows = MeasurementCompare.Compare(S.Before, S.After).Where(d => d.Before.HasValue || d.After.HasValue).ToList();
+                var rows = MeasurementCompare.CompareAll(S.Before, S.After).Where(d => d.Before.HasValue || d.After.HasValue).ToList();
                 var g = new Grid();
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(300) });
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
-                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(140) });
+                // Proportional columns so the table fits any width.
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star), MaxWidth = 300 });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 160 });
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star), MaxWidth = 160 });
                 void Cell(UIElement e, int r, int c) { Grid.SetRow(e, r); Grid.SetColumn(e, c); g.Children.Add(e); }
                 g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
                 Cell(Ui.Muted(Loc.S("Métrica", "Metric")), 0, 0); Cell(Ui.Muted(Loc.S("Antes", "Before")), 0, 1); Cell(Ui.Muted(Loc.S("Ahora", "Now")), 0, 2);

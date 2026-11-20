@@ -19,6 +19,8 @@ namespace Optimizzzer.Windows
         public IList<string> Servers { get; set; } = new List<string>();
         /// <summary>True when the servers come from the router (DHCP) rather than being set by hand.</summary>
         public bool Automatic { get; set; }
+        public string LocalIPv4 { get; set; }
+        public string Gateway { get; set; }
     }
 
     [DataContract]
@@ -57,7 +59,17 @@ namespace Optimizzzer.Windows
                     Description = n.Description,
                     Servers = n.GetIPProperties().DnsAddresses.Where(a => !a.IsIPv6SiteLocal).Select(a => a.ToString()).ToList(),
                     Automatic = IsAutomatic(n.Id, "Tcpip"),
+                    LocalIPv4 = n.GetIPProperties().UnicastAddresses.FirstOrDefault(a => a.Address.AddressFamily == AddressFamily.InterNetwork)?.Address.ToString(),
+                    Gateway = n.GetIPProperties().GatewayAddresses.Select(g => g.Address).FirstOrDefault(a => a.AddressFamily == AddressFamily.InterNetwork)?.ToString(),
                 }).ToList();
+        }
+
+        /// <summary>Turns the adapter off and on again, like unplugging the cable. The connection drops for a few seconds.</summary>
+        public void ResetAdapter(AdapterDns a)
+        {
+            Run("interface set interface name=\"" + a.Name + "\" admin=disabled", true);
+            System.Threading.Thread.Sleep(3000);
+            Run("interface set interface name=\"" + a.Name + "\" admin=enabled", true);
         }
 
         private bool IsAutomatic(string id, string stack)

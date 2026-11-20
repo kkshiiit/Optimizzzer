@@ -27,6 +27,34 @@ namespace Optimizzzer.Core.Tools
         public IList<RepairStep> Steps { get; set; } = new List<RepairStep>();
         /// <summary>Steps that put the system back in working order. They run even after a failure or Cancel.</summary>
         public IList<RepairStep> CleanupSteps { get; set; } = new List<RepairStep>();
+        public Text WhenToUse => RepairDetails.When(Id);
+        public Text WhatItDoes => RepairDetails.What(Id);
+    }
+
+    public static class RepairDetails
+    {
+        private static readonly Dictionary<string, (Text When, Text What)> Map = new Dictionary<string, (Text, Text)>
+        {
+            ["dism"] = (new Text("Cuando SFC dice que encontró archivos dañados y no pudo repararlos, o Windows Update falla una y otra vez.", "When SFC says it found damaged files it could not repair, or Windows Update keeps failing."),
+                new Text("Ejecuta DISM /Online /Cleanup-Image /RestoreHealth: compara la copia de reserva de Windows con la de Microsoft y descarga lo que esté dañado. Necesita internet. No borra programas ni archivos tuyos.", "Runs DISM /Online /Cleanup-Image /RestoreHealth: compares Windows' backup copy with Microsoft's and downloads what is damaged. Needs internet. Does not remove programs or your files.")),
+            ["sfc"] = (new Text("Si Windows muestra errores raros, pantallas azules o programas del sistema que no abren.", "When Windows shows odd errors, blue screens, or system programs that will not open."),
+                new Text("Ejecuta sfc /scannow: revisa cada archivo protegido de Windows y sustituye los modificados por la copia correcta. Si dice que no pudo reparar alguno, ejecuta DISM y luego SFC otra vez.", "Runs sfc /scannow: checks every protected Windows file and replaces modified ones with the correct copy. If it says it could not repair some, run DISM and then SFC again.")),
+            ["network"] = (new Text("Si el icono dice que hay conexión pero las webs no cargan, o después de quitar una VPN o un antivirus.", "When the icon says you are connected but pages do not load, or after removing a VPN or an antivirus."),
+                new Text("Vacía la caché DNS (ipconfig /flushdns) y restablece Winsock y TCP/IP (netsh). Se pierden las IP fijas que hubieras puesto a mano. Pide reiniciar.", "Flushes the DNS cache (ipconfig /flushdns) and resets Winsock and TCP/IP (netsh). Static IPs you set by hand are lost. Needs a restart.")),
+            ["windowsUpdate"] = (new Text("Si una actualización falla siempre con el mismo error o se queda descargando al 0 %.", "When an update always fails with the same error or stays downloading at 0%."),
+                new Text("Detiene Windows Update, BITS y Servicios criptográficos, renombra las carpetas SoftwareDistribution y catroot2 (no se borran: quedan como .old) y vuelve a iniciar los servicios. Windows descarga todo de nuevo.", "Stops Windows Update, BITS and Cryptographic Services, renames the SoftwareDistribution and catroot2 folders (not deleted: they stay as .old) and starts the services again. Windows downloads everything again.")),
+            ["store"] = (new Text("Si la Microsoft Store no abre, o las descargas se quedan en pendiente.", "When the Microsoft Store will not open, or downloads stay pending."),
+                new Text("Ejecuta wsreset: borra la caché de la Store sin tocar tus apps ni tu cuenta. Se abre la Store al terminar.", "Runs wsreset: clears the Store cache without touching your apps or account. The Store opens when done.")),
+            ["iconCache"] = (new Text("Si ves iconos en blanco, genéricos o de otro programa.", "When you see blank, generic or wrong icons."),
+                new Text("Cierra el Explorador, borra los archivos de la caché de iconos y lo vuelve a abrir. Las ventanas de carpetas abiertas se cierran.", "Closes File Explorer, deletes the icon cache files and opens it again. Open folder windows close.")),
+            ["chkdsk"] = (new Text("Si el equipo se apagó de golpe, un archivo no se puede abrir o el disco hace ruidos.", "When the PC lost power, a file will not open, or the drive makes noises."),
+                new Text("Ejecuta chkdsk C: /scan: revisa el sistema de archivos sin desmontar el disco y sin cambiar nada. Si encuentra errores, dice cómo repararlos (normalmente chkdsk /spotfix al reiniciar).", "Runs chkdsk C: /scan: checks the file system online without changing anything. If it finds errors, it tells you how to fix them (usually chkdsk /spotfix at restart).")),
+            ["firewall"] = (new Text("Si un programa o juego no conecta y sospechas de una regla del Firewall que añadió otro programa.", "When a program or game cannot connect and you suspect a Firewall rule added by another program."),
+                new Text("Ejecuta netsh advfirewall reset: vuelve el Firewall de Windows a su configuración de fábrica. Se borran las reglas que añadieron los programas; algunos te pedirán permiso otra vez la próxima vez que se conecten.", "Runs netsh advfirewall reset: returns Windows Firewall to its factory settings. Rules programs added are deleted; some will ask for permission again the next time they connect.")),
+        };
+
+        public static Text When(string id) => id != null && Map.TryGetValue(id, out var t) ? t.When : null;
+        public static Text What(string id) => id != null && Map.TryGetValue(id, out var t) ? t.What : null;
     }
 
     public static class RepairCatalog
@@ -81,6 +109,20 @@ namespace Optimizzzer.Core.Tools
                     new RepairStep("cmd.exe", "/c sc query bits | find \"RUNNING\" >nul || net start bits"),
                     new RepairStep("cmd.exe", "/c sc query wuauserv | find \"RUNNING\" >nul || net start wuauserv"),
                 },
+            },
+            new RepairTask
+            {
+                Id = "chkdsk", Title = new Text("Comprobar el disco (sin cambiar nada)", "Check the drive (read only)"),
+                Description = new Text("Revisa el sistema de archivos del disco del sistema mientras lo usas. Solo informa; no repara ni reinicia.", "Checks the system drive's file system while you use it. It only reports; it does not repair or restart."),
+                Duration = new Text("1 a 10 minutos", "1 to 10 minutes"),
+                Steps = { new RepairStep("chkdsk.exe", "%SystemDrive% /scan") },
+            },
+            new RepairTask
+            {
+                Id = "firewall", Title = new Text("Restablecer el Firewall de Windows", "Reset Windows Firewall"),
+                Description = new Text("Vuelve el Firewall a su configuración de fábrica y borra las reglas que añadieron los programas.", "Returns the Firewall to factory settings and deletes rules programs added."),
+                Duration = new Text("Menos de 1 minuto", "Under 1 minute"),
+                Steps = { new RepairStep("netsh.exe", "advfirewall reset") },
             },
             new RepairTask
             {

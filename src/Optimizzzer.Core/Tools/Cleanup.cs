@@ -22,6 +22,53 @@ namespace Optimizzzer.Core.Tools
         public TimeSpan MinAge { get; set; } = TimeSpan.Zero;
         public bool Recursive { get; set; } = true;
         public bool SelectedByDefault { get; set; } = true;
+        /// <summary>The longer "More information" text: what it is, why it piles up, whether it is safe, what happens after.</summary>
+        public Text Details => CleanupDetails.For(Id);
+    }
+
+    public static class CleanupDetails
+    {
+        private static readonly Dictionary<string, Text> Map = new Dictionary<string, Text>
+        {
+            ["userTemp"] = new Text(
+                "Qué es: archivos que los programas e instaladores crean para trabajar y deberían borrar al terminar. Por qué se acumula: muchos no lo hacen, sobre todo si se cierran mal. Es seguro: sí, se dejan los de las últimas 24 horas y nunca se fuerza un archivo en uso. Después: nada cambia; si un programa necesita uno, lo vuelve a crear.",
+                "What it is: files programs and installers create while working and should delete afterwards. Why it piles up: many do not, especially after a crash. Safe: yes, files from the last 24 hours are kept and a file in use is never forced. Afterwards: nothing changes; a program that needs one creates it again."),
+            ["winTemp"] = new Text(
+                "Qué es: la carpeta temporal de Windows y de los servicios del sistema. Por qué se acumula: actualizaciones e instaladores dejan registros y descomprimidos. Es seguro: sí, con el mismo margen de 24 horas. Después: nada cambia.",
+                "What it is: the temporary folder of Windows and system services. Why it piles up: updates and installers leave logs and unpacked files. Safe: yes, with the same 24-hour margin. Afterwards: nothing changes."),
+            ["thumbs"] = new Text(
+                "Qué es: las miniaturas que ves en las carpetas con fotos y vídeos. Por qué se acumula: guarda las de todo lo que abriste alguna vez, aunque ya no exista. Es seguro: sí. Después: la primera vez que abras una carpeta con muchas fotos tardará un poco en mostrar las miniaturas.",
+                "What it is: the previews you see in folders with photos and videos. Why it piles up: it keeps one for everything you ever opened, even deleted files. Safe: yes. Afterwards: the first time you open a folder with many photos, previews take a moment to appear."),
+            ["crashDumps"] = new Text(
+                "Qué es: copias de la memoria guardadas cuando un programa o Windows fallan, y los informes de errores. Por qué se acumula: cada fallo deja uno y casi nunca se borran. Es seguro: sí, salvo que un técnico te haya pedido un volcado concreto. Después: nada cambia.",
+                "What it is: memory copies saved when a program or Windows crashes, plus error reports. Why it piles up: each crash leaves one and they are rarely removed. Safe: yes, unless a technician asked you for a specific dump. Afterwards: nothing changes."),
+            ["deliveryOpt"] = new Text(
+                "Qué es: trozos de actualizaciones que Windows guarda para compartir con otros equipos de tu red. Es seguro: sí. Después: si otro PC de tu casa necesita la misma actualización, la descargará de internet en lugar de este equipo.",
+                "What it is: pieces of updates Windows keeps to share with other PCs on your network. Safe: yes. Afterwards: if another PC at home needs the same update, it downloads it from the internet instead of from this PC."),
+            ["dxCache"] = new Text(
+                "Qué es: sombreadores ya compilados por la tarjeta gráfica para que los juegos carguen más rápido. Por qué está desmarcado: borrarla no mejora el rendimiento; solo sirve si un juego muestra fallos gráficos después de actualizar los controladores. Después: la primera partida de cada juego puede tener tirones mientras se regenera.",
+                "What it is: shaders your graphics card already compiled so games load faster. Why it is unticked: deleting it does not improve performance; it only helps when a game shows graphics glitches after a driver update. Afterwards: the first session of each game may stutter while it is rebuilt."),
+            ["wuCache"] = new Text(
+                "Qué es: las descargas de actualizaciones que ya se instalaron. Por qué se acumula: Windows las conserva por si tiene que reintentar. Es seguro: sí; se detiene Windows Update mientras se borran y se vuelve a iniciar al terminar. Después: si una actualización falló, se descarga de nuevo.",
+                "What it is: update downloads that are already installed. Why it piles up: Windows keeps them in case it has to retry. Safe: yes; Windows Update is stopped while they are deleted and started again afterwards. Afterwards: if an update had failed, it is downloaded again."),
+            ["recycleBin"] = new Text(
+                "Qué es: los archivos que borraste. Es seguro: solo si no necesitas recuperar nada; esto no se puede deshacer. Después: los archivos desaparecen del todo.",
+                "What it is: files you deleted. Safe: only if you do not need anything back; this cannot be undone. Afterwards: the files are gone for good."),
+            ["componentStore"] = new Text(
+                "Qué es: versiones antiguas de partes de Windows que las actualizaciones sustituyeron. Usa la herramienta oficial DISM con StartComponentCleanup. Tarda: de 5 a 20 minutos. Después: no podrás desinstalar las actualizaciones ya instaladas, pero todo sigue funcionando igual.",
+                "What it is: old versions of Windows parts replaced by updates. It uses the official DISM tool with StartComponentCleanup. Takes: 5 to 20 minutes. Afterwards: you cannot uninstall already installed updates, but everything works the same."),
+            ["edgeCache"] = new Text(
+                "Qué es: copias de webs, imágenes y scripts que Edge guarda para cargar más rápido. Por qué se acumula: crece hasta varios GB. Es seguro: sí; no se tocan contraseñas, historial, cookies ni sesiones. Cierra Edge antes: si está abierto, sus archivos en uso se saltan. Después: las webs que visitas a menudo tardan un poco más la primera vez.",
+                "What it is: copies of pages, images and scripts Edge keeps to load faster. Why it piles up: it grows to several GB. Safe: yes; passwords, history, cookies and sessions are not touched. Close Edge first: if it is open, its files in use are skipped. Afterwards: sites you visit often load a little slower the first time."),
+            ["chromeCache"] = new Text(
+                "Qué es: la caché de Chrome (copias de webs). Es seguro: sí; no se tocan contraseñas, historial, cookies ni sesiones. Cierra Chrome antes. Después: las webs tardan un poco más la primera vez.",
+                "What it is: Chrome's cache (copies of pages). Safe: yes; passwords, history, cookies and sessions are not touched. Close Chrome first. Afterwards: sites load a little slower the first time."),
+            ["firefoxCache"] = new Text(
+                "Qué es: la caché de Firefox (copias de webs). Es seguro: sí; no se tocan contraseñas, historial, cookies ni sesiones. Cierra Firefox antes. Después: las webs tardan un poco más la primera vez.",
+                "What it is: Firefox's cache (copies of pages). Safe: yes; passwords, history, cookies and sessions are not touched. Close Firefox first. Afterwards: sites load a little slower the first time."),
+        };
+
+        public static Text For(string id) => id != null && Map.TryGetValue(id, out var t) ? t : null;
     }
 
     public sealed class CleanupEstimate
@@ -92,6 +139,24 @@ namespace Optimizzzer.Core.Tools
             },
             new CleanupTarget
             {
+                Id = "edgeCache", Title = new Text("Caché de Microsoft Edge", "Microsoft Edge cache"),
+                Description = new Text("Copias de webs que Edge guarda. No toca contraseñas, historial ni cookies. Cierra Edge antes.", "Page copies Edge keeps. Passwords, history and cookies are not touched. Close Edge first."),
+                Folders = new[] { @"%LOCALAPPDATA%\Microsoft\Edge\User Data\*\Cache\Cache_Data", @"%LOCALAPPDATA%\Microsoft\Edge\User Data\*\Code Cache" },
+            },
+            new CleanupTarget
+            {
+                Id = "chromeCache", Title = new Text("Caché de Google Chrome", "Google Chrome cache"),
+                Description = new Text("Copias de webs que Chrome guarda. No toca contraseñas, historial ni cookies. Cierra Chrome antes.", "Page copies Chrome keeps. Passwords, history and cookies are not touched. Close Chrome first."),
+                Folders = new[] { @"%LOCALAPPDATA%\Google\Chrome\User Data\*\Cache\Cache_Data", @"%LOCALAPPDATA%\Google\Chrome\User Data\*\Code Cache" },
+            },
+            new CleanupTarget
+            {
+                Id = "firefoxCache", Title = new Text("Caché de Mozilla Firefox", "Mozilla Firefox cache"),
+                Description = new Text("Copias de webs que Firefox guarda. No toca contraseñas, historial ni cookies. Cierra Firefox antes.", "Page copies Firefox keeps. Passwords, history and cookies are not touched. Close Firefox first."),
+                Folders = new[] { @"%LOCALAPPDATA%\Mozilla\Firefox\Profiles\*\cache2" },
+            },
+            new CleanupTarget
+            {
                 Id = "recycleBin", Kind = CleanupKind.RecycleBin,
                 Title = new Text("Papelera de reciclaje", "Recycle Bin"),
                 Description = new Text("Vacía la papelera de todas las unidades. No se puede deshacer.", "Empties the Recycle Bin on every drive. This cannot be undone."),
@@ -115,12 +180,41 @@ namespace Optimizzzer.Core.Tools
 
         public static string Expand(string folder) => Environment.ExpandEnvironmentVariables(folder);
 
+        /// <summary>
+        /// Expands environment variables and "*" path segments (one per browser profile, for example) into the
+        /// folders that exist. Only whole segments can be "*", so nothing outside the intended place matches.
+        /// </summary>
+        public static IEnumerable<string> ExpandFolders(string raw)
+        {
+            var path = Expand(raw);
+            if (path.IndexOf('*') < 0) { yield return path; yield break; }
+            var parts = path.Split('\\', '/');
+            var current = new List<string> { parts[0].Length == 0 ? "/" : parts[0] + Path.DirectorySeparatorChar };
+            for (int i = 1; i < parts.Length; i++)
+            {
+                if (parts[i].Length == 0) continue;
+                var next = new List<string>();
+                foreach (var dir in current)
+                {
+                    if (parts[i] == "*")
+                    {
+                        string[] subs;
+                        try { subs = Directory.GetDirectories(dir); } catch (Exception) { continue; }
+                        next.AddRange(subs);
+                    }
+                    else next.Add(Path.Combine(dir, parts[i]));
+                }
+                current = next;
+            }
+            foreach (var d in current) if (Directory.Exists(d)) yield return d;
+        }
+
         private IEnumerable<FileInfo> Files(CleanupTarget t)
         {
             var cutoff = _now() - t.MinAge;
-            foreach (var raw in t.Folders)
+            foreach (var folder in t.Folders.SelectMany(ExpandFolders))
             {
-                var dir = new DirectoryInfo(Expand(raw));
+                var dir = new DirectoryInfo(folder);
                 if (!dir.Exists) continue;
                 foreach (var f in SafeEnumerate(dir, t.Pattern, t.Recursive))
                 {
@@ -214,8 +308,8 @@ namespace Optimizzzer.Core.Tools
                 }
                 catch (Exception) { r.Skipped++; }
             }
-            foreach (var raw in t.Folders)
-                if (t.Recursive) RemoveEmptyDirs(new DirectoryInfo(Expand(raw)), isRoot: true);
+            foreach (var folder in t.Folders.SelectMany(ExpandFolders))
+                if (t.Recursive) RemoveEmptyDirs(new DirectoryInfo(folder), isRoot: true);
         }
 
         private static void RemoveEmptyDirs(DirectoryInfo d, bool isRoot)

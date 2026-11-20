@@ -30,7 +30,8 @@ namespace Optimizzzer.App.Pages
             foreach (var t in RepairCatalog.All)
             {
                 var info = Ui.Stack(2, Ui.Text(Loc.S(t.Title), 14, true), Ui.Muted(Loc.S(t.Description)),
-                    Ui.Muted(Loc.S("Duración aproximada: ", "Approximate duration: ") + Loc.S(t.Duration) + (t.NeedsReboot ? Loc.S(" · requiere reiniciar", " · needs a restart") : ""), 12));
+                    Ui.Muted(Loc.S("Duración aproximada: ", "Approximate duration: ") + Loc.S(t.Duration) + (t.NeedsReboot ? Loc.S(" · requiere reiniciar", " · needs a restart") : ""), 12),
+                    Ui.MoreInfo((Loc.S("Cuándo usarlo", "When to use it"), Loc.S(t.WhenToUse)), (Loc.S("Qué hace exactamente", "What it does exactly"), Loc.S(t.WhatItDoes))));
                 var run = Ui.Secondary(_running == t ? Loc.S("En curso…", "Running…") : Loc.S("Ejecutar", "Run"), () => _ = RunAsync(t), Icons.Play);
                 run.IsEnabled = _running == null;
                 AutomationProperties.SetName(run, Loc.S("Ejecutar ", "Run ") + Loc.S(t.Title));
@@ -44,8 +45,9 @@ namespace Optimizzzer.App.Pages
                 FontFamily = new FontFamily("Consolas"), FontSize = 12, Text = _log.ToString(),
             };
             AutomationProperties.SetName(_output, Loc.S("Salida del comando", "Command output"));
+            var save = _log.Length > 0 && _running == null ? Ui.Subtle(Loc.S("Guardar la salida", "Save the output"), SaveOutput, Icons.Save) : null;
             var outputHeader = Ui.Row(12, Ui.H3(Loc.S("Salida", "Output")),
-                _lastResult != null ? Ui.Text(_lastResult, 14, true, _lastResult.StartsWith("✓") ? "Success" : "Advanced") : null);
+                _lastResult != null ? Ui.Text(_lastResult, 14, true, _lastResult.StartsWith("✓") ? "Success" : "Advanced") : null, save);
             var outputSection = Ui.Stack(8, outputHeader, _log.Length == 0 ? (UIElement)Ui.Empty(Loc.S("Ejecuta una reparación para ver aquí lo que hace.", "Run a repair to see what it does here.")) : _output);
             outputSection.Margin = new Thickness(0, 24, 0, 0);
 
@@ -67,7 +69,7 @@ namespace Optimizzzer.App.Pages
                 foreach (var step in t.Steps)
                 {
                     Append("> " + step);
-                    var code = await Task.Run(() => S.Win.Process.RunStreaming(Environment.ExpandEnvironmentVariables(step.File), step.Args, Append, _cts.Token));
+                    var code = await Task.Run(() => S.Win.Process.RunStreaming(Environment.ExpandEnvironmentVariables(step.File), Environment.ExpandEnvironmentVariables(step.Args ?? ""), Append, _cts.Token));
                     Append(Loc.S("Código de salida: ", "Exit code: ") + code);
                     if (code != 0 && !step.TolerateExitCode) ok = false;
                 }
@@ -82,7 +84,7 @@ namespace Optimizzzer.App.Pages
                     Append("> " + step);
                     try
                     {
-                        var code = await Task.Run(() => S.Win.Process.RunStreaming(Environment.ExpandEnvironmentVariables(step.File), step.Args, Append, CancellationToken.None));
+                        var code = await Task.Run(() => S.Win.Process.RunStreaming(Environment.ExpandEnvironmentVariables(step.File), Environment.ExpandEnvironmentVariables(step.Args ?? ""), Append, CancellationToken.None));
                         Append(Loc.S("Código de salida: ", "Exit code: ") + code);
                         if (code != 0 && !step.TolerateExitCode) ok = false;
                     }
@@ -101,6 +103,18 @@ namespace Optimizzzer.App.Pages
             _lastResult = ok ? "✓ " + Loc.S("Terminado", "Finished") : Loc.S("Terminado con errores, revisa la salida", "Finished with errors, check the output");
             _running = null;
             W.RefreshCurrentIf(this);
+        }
+
+        private void SaveOutput()
+        {
+            var dlg = new Microsoft.Win32.SaveFileDialog { FileName = "Optimizzzer-reparacion-" + DateTime.Now.ToString("yyyy-MM-dd-HHmm") + ".txt", Filter = "Texto (*.txt)|*.txt" };
+            if (dlg.ShowDialog(W) != true) return;
+            try
+            {
+                System.IO.File.WriteAllText(dlg.FileName, _log.ToString(), new System.Text.UTF8Encoding(true));
+                W.Toast(ToastKind.Success, Loc.S("Salida guardada en ", "Output saved to ") + System.IO.Path.GetFileName(dlg.FileName) + ".");
+            }
+            catch (Exception ex) { W.ShowError(ex.Message); }
         }
 
         private void Append(string line)
