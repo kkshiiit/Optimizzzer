@@ -40,6 +40,17 @@ namespace Optimizzzer.Core.Tools
             new DnsProvider { Id = "adguard", Name = "AdGuard DNS", IPv4 = new[] { "94.140.14.14", "94.140.15.15" }, IPv6 = new[] { "2a10:50c0::ad1:ff", "2a10:50c0::ad2:ff" },
                 Description = new Text("Bloquea anuncios y rastreadores en todo el equipo.", "Blocks ads and trackers across the whole PC.") },
         };
+
+        /// <summary>
+        /// The provider an adapter is using: the one whose IPv4 servers are all in the adapter's list.
+        /// Null for automatic (router) or custom DNS.
+        /// </summary>
+        public static DnsProvider Match(IEnumerable<string> servers)
+        {
+            var set = new HashSet<string>((servers ?? Enumerable.Empty<string>()).Select(x => x.Trim()), StringComparer.OrdinalIgnoreCase);
+            if (set.Count == 0) return null;
+            return All.FirstOrDefault(p => p.IPv4.Length > 0 && p.IPv4.All(set.Contains));
+        }
     }
 
     public static class DnsBenchmark

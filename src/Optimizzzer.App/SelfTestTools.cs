@@ -109,6 +109,7 @@ namespace Optimizzzer.App
                     var now = win.Dns.Adapters().First(x => x.Id == a.Id);
                     log("after apply: " + string.Join(",", now.Servers));
                     if (!now.Servers.Contains("1.1.1.1")) throw new Exception("1.1.1.1 was not set");
+                    if (DnsCatalog.Match(now.Servers)?.Id != "cloudflare") throw new Exception("the page would not show Cloudflare as in use");
                     var lat = DnsBenchmark.MeasureAsync(cloudflare).GetAwaiter().GetResult();
                     log("cloudflare median " + (lat.MedianMs?.ToString("0.0") ?? "no answer") + " ms, failures " + lat.Failures);
                 }
