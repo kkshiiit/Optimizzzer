@@ -85,6 +85,7 @@ namespace Optimizzzer.App.Shell
             _pages.Add(new MeasurePage(state, this));
             _pages.Add(new SettingsPage(state, this));
             _pages.Add(new HelpPage(state, this));
+            _pages.Add(new AdvancedPage(state, this));
 
             Mark("pages");
             _navColumn = new ColumnDefinition { Width = GridLength.Auto };

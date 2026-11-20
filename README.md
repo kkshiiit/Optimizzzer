@@ -53,7 +53,9 @@ Cada nivel incluye los anteriores. Al elegirlo ves en lenguaje simple qué va a 
 
 ## Qué no hace (a propósito)
 
-No aplica ajustes placebo ni peligrosos. La lista y los motivos están en [docs/EXCLUDED.md](docs/EXCLUDED.md). Tampoco desactiva Windows Defender ni Windows Update, ni desinstala Edge.
+No aplica ajustes placebo ni peligrosos. La lista y los motivos están en [docs/EXCLUDED.md](docs/EXCLUDED.md).
+
+Quitar Copilot, Xbox, Edge o la Store, desactivar Defender y pausar Windows Update durante años **no** están en los niveles ni en Personalizar. Viven en una zona aparte, **Bajo tu responsabilidad**, que pide aceptar un aviso antes de mostrarse. Cada acción se puede guardar como script `.ps1` (también en [`scripts/`](scripts)). Lee [docs/RESPONSABILIDAD.md](docs/RESPONSABILIDAD.md): los autores no se hacen cargo de ningún daño.
 
 ## Descargar
 
@@ -113,7 +115,9 @@ Si ejecutas la app con una cuenta de administrador distinta a la tuya, los ajust
 
 ## Datos que guarda
 
-Todo queda en `C:\ProgramData\Optimizzzer`: el diario para deshacer, las mediciones, la copia de seguridad del DNS y los ajustes de idioma y tema. Borrar la carpeta no deshace nada, solo olvida el historial.
+Todo queda en `C:\ProgramData\Optimizzzer`: el diario para deshacer, las mediciones (se borran solas a los 7 días, salvo las exportadas), la copia de seguridad del DNS y los ajustes de idioma y tema. La única otra huella es la tarea "Medir después de reiniciar", y solo si la programas. No escribe en `%TEMP%` ni instala nada.
+
+En Ajustes > Datos y rastros ves qué hay y por qué. Puedes pedir que se borre todo al cerrar si no queda nada por deshacer, o borrarlo todo de una vez. Borrar la carpeta no deshace cambios, solo olvida el historial.
 
 ## Licencia
 

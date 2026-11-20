@@ -88,6 +88,8 @@ namespace Optimizzzer.App.Shell
         public const string Save = "";
         public const string Restart = "";     // Refresh
         public const string Shield = "";
+        public const string Pause = "\uE769";
+        public const string Download = "\uE896";
         public const string Play = "";
         public const string Stop = "";
 

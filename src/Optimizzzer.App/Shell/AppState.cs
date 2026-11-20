@@ -132,6 +132,8 @@ namespace Optimizzzer.App.Shell
                     if (kv[0] == "tour" && kv[1] == "done") TourDone = true;
                     if (kv[0] == "lang" && !LanguageFromCommandLine && Enum.TryParse<Lang>(kv[1], out var l)) Loc.Lang = l;
                     if (kv[0] == "nav" && kv[1] == "collapsed") NavCollapsed = true;
+                    if (kv[0] == "riskAccepted" && kv[1] == "1") RiskAccepted = true;
+                    if (kv[0] == "cleanOnExit" && kv[1] == "1") CleanOnExit = true;
                     if (kv[0] == "textScale" && int.TryParse(kv[1], out var ts) && (ts == 100 || ts == 115 || ts == 130)) TextScale = ts;
                     if (kv[0] == "window") ParsePlacement(kv[1]);
                     if (kv[0] == "dnsLast")
@@ -151,6 +153,12 @@ namespace Optimizzzer.App.Shell
         public LiteChoice SavedLite { get; private set; } = LiteChoice.Auto;
         public bool TourDone { get; set; }
         public bool NavCollapsed { get; set; }
+        /// <summary>The one-time "at your own risk" notice of the advanced zone was accepted.</summary>
+        public bool RiskAccepted { get; set; }
+        /// <summary>Delete Optimizzzer's data when closing, if there is nothing left to undo.</summary>
+        public bool CleanOnExit { get; set; }
+        /// <summary>Set after "Delete all data": settings must not be written again on close.</summary>
+        public bool DataDeleted { get; set; }
         /// <summary>Text and controls size in percent: 100, 115 or 130.</summary>
         public int TextScale { get; set; } = 100;
         public Rect? SavedPlacement { get; private set; }
@@ -178,6 +186,7 @@ namespace Optimizzzer.App.Shell
 
         public void SaveSettings()
         {
+            if (DataDeleted) return;
             try
             {
                 Directory.CreateDirectory(Win.DataDir);
@@ -187,6 +196,8 @@ namespace Optimizzzer.App.Shell
                     "lang=" + Loc.Lang, "tour=" + (TourDone ? "done" : "pending"),
                     "nav=" + (NavCollapsed ? "collapsed" : "expanded"),
                     "textScale=" + TextScale,
+                    RiskAccepted ? "riskAccepted=1" : "",
+                    CleanOnExit ? "cleanOnExit=1" : "",
                     SavedPlacement.HasValue
                         ? "window=" + string.Join(",", new[] { SavedPlacement.Value.Left, SavedPlacement.Value.Top, SavedPlacement.Value.Width, SavedPlacement.Value.Height }
                             .Select(x => x.ToString("0", CultureInfo.InvariantCulture))) + "," + (SavedMaximized ? "max" : "normal")

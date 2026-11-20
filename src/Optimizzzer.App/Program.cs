@@ -55,7 +55,9 @@ namespace Optimizzzer.App
             Theme.WatchSystem();
             var window = new MainWindow(state);
             System.Threading.Tasks.Task.Run(() => Optimizzzer.Windows.MeasureAfterRestart.CleanupLeftovers(state.Win.Process));
-            return app.Run(window);
+            var code = app.Run(window);
+            if (state.CleanOnExit && !state.DataDeleted) Optimizzzer.Windows.DataTraces.CleanOnExit(state.Win);
+            return code;
         }
 
         /// <summary>
@@ -202,6 +204,15 @@ namespace Optimizzzer.App
                             w.Navigate(p.Key);
                             Verify("page " + p.Key);
                         }
+                        // The advanced zone after accepting its notice: what is installed is read with PowerShell.
+                        var adv = w.PageOf<Pages.AdvancedPage>();
+                        adv.AcceptForTest();
+                        w.Navigate("advanced");
+                        var advUntil = DateTime.Now.AddSeconds(90);
+                        while (!adv.LoadedForTest && DateTime.Now < advUntil) Pump();
+                        if (!adv.LoadedForTest) throw new Exception("the advanced zone did not finish reading");
+                        Verify("page advanced accepted");
+                        state.RiskAccepted = false;
                         // Pick the recommended profile so the selection and review steps have content.
                         foreach (var t in Profiles.Select(state.ScanResults, Profiles.Recommend(state.Ctx.Info), state.Ctx.Info)) state.Selected.Add(t.Id);
                         w.Navigate("wizard");
