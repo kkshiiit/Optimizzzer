@@ -37,15 +37,33 @@ namespace Optimizzzer.App.Shell
         private TextBlock _brand;
 
         /// <summary>Below this width the menu shows icons only and pages use tighter margins.</summary>
-        public const double CompactWidth = 1100;
+        public const double CompactWidth = 900;
         /// <summary>True while the window is narrow (or the user collapsed the menu): pages read it when they build.</summary>
         public static bool Compact { get; private set; }
         private IInputElement _focusBeforeOverlay;
 
+        /// <summary>Milestones of the window's construction, for the self-test's start-time check.</summary>
+        public static readonly List<string> StartupTrace = new List<string>();
+        private static readonly System.Diagnostics.Stopwatch TraceClock = new System.Diagnostics.Stopwatch();
+        private static void Mark(string what) { lock (StartupTrace) StartupTrace.Add(what + " " + TraceClock.ElapsedMilliseconds + " ms"); }
+
         public MainWindow(AppState state)
         {
+            lock (StartupTrace) StartupTrace.Clear();
+            TraceClock.Restart();
             _state = state;
             Title = "Optimizzzer";
+            // The icon is decoded after the first frame: a visible window comes first.
+            ContentRendered += (_, __) => Dispatcher.BeginInvoke(new Action(() =>
+            {
+                try
+                {
+                    using (var ico = typeof(MainWindow).Assembly.GetManifestResourceStream("Optimizzzer.app.ico"))
+                        if (ico != null) Icon = System.Windows.Media.Imaging.BitmapFrame.Create(ico, System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+                }
+                catch (Exception) { } // the window works without its icon
+            }), DispatcherPriority.Background);
+            Mark("icon");
             MinWidth = 640; MinHeight = 480;
             PlaceOnScreen();
             UseLayoutRounding = true;
@@ -57,6 +75,7 @@ namespace Optimizzzer.App.Shell
             FontSize = 14;
 
             _pages.Add(new HomePage(state, this));
+            _pages.Add(new LevelsPage(state, this));
             _pages.Add(new WizardPage(state, this));
             _pages.Add(new CleanupPage(state, this));
             _pages.Add(new RepairPage(state, this));
@@ -70,40 +89,58 @@ namespace Optimizzzer.App.Shell
             _pages.Add(new MeasurePage(state, this));
             _pages.Add(new SettingsPage(state, this));
             _pages.Add(new HelpPage(state, this));
+            _pages.Add(new AdvancedPage(state, this));
 
-            _navColumn = new ColumnDefinition { Width = new GridLength(244) };
+            Mark("pages");
+            _navColumn = new ColumnDefinition { Width = GridLength.Auto };
             _root.ColumnDefinitions.Add(_navColumn);
             _root.ColumnDefinitions.Add(new ColumnDefinition());
             _root.Children.Add(BuildNav());
+
+            // Right column: a slim header with the global actions, then the content surface below it.
+            var right = new Grid();
+            right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            right.RowDefinitions.Add(new RowDefinition());
+            Mark("nav");
+            right.Children.Add(BuildHeader());
 
             // The content surface floats above the window background: the first thing the eye lands on.
             var contentGrid = new Grid();
             contentGrid.Children.Add(_host);
             contentGrid.Children.Add(_toasts);
-            _content = new Border { CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 12, 12, 12), Child = contentGrid, BorderThickness = new Thickness(1) };
+            _content = new Border { CornerRadius = new CornerRadius(12), Margin = new Thickness(0, 0, 12, 12), Child = contentGrid, BorderThickness = new Thickness(1) };
             _content.SetResourceReference(Border.BackgroundProperty, "Surface");
             _content.SetResourceReference(Border.BorderBrushProperty, "Divider");
             Theme.Elevate(_content);
-            Grid.SetColumn(_content, 1);
-            _root.Children.Add(_content);
+            Grid.SetRow(_content, 1);
+            right.Children.Add(_content);
+            Grid.SetColumn(right, 1);
+            _root.Children.Add(right);
 
             Grid.SetColumnSpan(_overlay, 2);
             _root.Children.Add(_overlay);
             Content = _root;
+            ApplyTextScale();
+            Mark("layout");
 
             PreviewKeyDown += OnKey;
             SizeChanged += (_, __) => UpdateLayoutMode();
             Closing += (_, __) => RememberPlacement();
-            SourceInitialized += (_, __) => Theme.MatchTitleBar(this);
+            SourceInitialized += (_, __) => { Mark("source initialized"); Theme.MatchTitleBar(this); Mark("title bar"); };
+            Loaded += (_, __) => Mark("loaded");
             Theme.Changed += OnThemeChanged;
             Closed += (_, __) => Theme.Changed -= OnThemeChanged;
             ContentRendered += (_, __) =>
             {
+                Mark("content rendered");
                 if (!_state.TourDone && !Program.InSelfTest) Dispatcher.BeginInvoke(new Action(ShowTour), DispatcherPriority.ApplicationIdle);
             };
+            GameMode = new GameModeController(state, this);
             Navigate("home");
+            Mark("home");
         }
 
+        public GameModeController GameMode { get; }
         public IReadOnlyList<AppPage> Pages => _pages;
         public AppPage CurrentPage => _current;
 
@@ -158,6 +195,13 @@ namespace Optimizzzer.App.Shell
         public bool IsFullScreen => _fullScreen;
 
         /// <summary>F11: the whole screen for the app, no title bar or taskbar. F11 or Esc goes back.</summary>
+        /// <summary>Scales the whole window (text, icons and controls together, so nothing is cut).</summary>
+        public void ApplyTextScale()
+        {
+            double f = _state.TextScale / 100.0;
+            _root.LayoutTransform = f == 1 ? Transform.Identity : new ScaleTransform(f, f);
+        }
+
         public void ToggleFullScreen()
         {
             if (!_fullScreen)
@@ -178,9 +222,13 @@ namespace Optimizzzer.App.Shell
             }
         }
 
+        // A narrow window closes the menu by itself; ≡ can still open it there until the window is resized again.
+        private bool _userOpened;
+
         public void ToggleNavCollapsed()
         {
-            _state.NavCollapsed = !_state.NavCollapsed;
+            if (Compact) { _state.NavCollapsed = false; _userOpened = true; }
+            else { _state.NavCollapsed = true; _userOpened = false; }
             _state.SaveSettings();
             UpdateLayoutMode(force: true);
         }
@@ -190,81 +238,162 @@ namespace Optimizzzer.App.Shell
         private void UpdateLayoutMode(bool force = false)
         {
             if (ActualWidth <= 0) return;
-            bool compact = ActualWidth < CompactWidth || _state.NavCollapsed;
+            bool compact = _state.NavCollapsed || (ActualWidth < CompactWidth && !_userOpened);
             // Compared with what this window last applied, not with the shared flag, so a new window always sizes its menu.
             if (compact == _appliedCompact && !force) return;
+            bool first = _appliedCompact == null;
             _appliedCompact = compact;
             Compact = compact;
-            _navColumn.Width = new GridLength(compact ? 72 : 244);
             BuildNavItems();
+            AnimateNav(compact, animate: !first);
             // Pages read Compact when they build; rebuild them all (only the visible one is built right away).
             foreach (var p in _pages) p.Invalidate();
             if (_current != null && !OverlayOpen) { ShowView(_current.View); _current.OnShown(); }
         }
 
+        public const double NavOpenWidth = 232, NavClosedWidth = 56;
+        private Border _navHost;
+        private ScrollViewer _navScroll;
+        private Button _menuButton;
+
+        /// <summary>
+        /// The menu: [≡] Optimizzzer on top, then the pages. Closed, it keeps only the icons (same size, centred, never
+        /// cut) and the title slides away; open, every icon gets its name.
+        /// </summary>
         private FrameworkElement BuildNav()
         {
-            var g = new Grid { Margin = new Thickness(12, 20, 12, 12) };
+            var g = new Grid { Margin = new Thickness(8, 12, 8, 12) };
             AutomationProperties.SetName(g, Loc.S("Navegación", "Navigation"));
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             g.RowDefinitions.Add(new RowDefinition());
-            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            _brand = Ui.Text("Optimizzzer", 20, true, "Fg", wrap: false);
-            _brand.Margin = new Thickness(12, 0, 0, 16);
-            g.Children.Add(_brand);
+            _menuButton = new Button { Content = Ui.Icon(Icons.Menu, 16), Width = 40, Height = 40, HorizontalContentAlignment = HorizontalAlignment.Center, Padding = new Thickness(0) };
+            _menuButton.SetResourceReference(StyleProperty, "NavButton");
+            _menuButton.Click += (_, __) => ToggleNavCollapsed();
+            _brand = Ui.Text("Optimizzzer", 18, true, "Fg", wrap: false);
+            _brand.Margin = new Thickness(8, 0, 0, 0);
+            _brand.VerticalAlignment = VerticalAlignment.Center;
+            _brand.RenderTransform = new TranslateTransform();
+            var top = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
+            top.Children.Add(_menuButton);
+            top.Children.Add(_brand);
+            g.Children.Add(top);
 
             _nav = new StackPanel();
-            var scroll = Ui.Scroll(_nav);
-            Grid.SetRow(scroll, 1);
-            g.Children.Add(scroll);
+            _navScroll = Ui.Scroll(_nav);
+            Grid.SetRow(_navScroll, 1);
+            g.Children.Add(_navScroll);
 
-            _navBottom = new StackPanel { Margin = new Thickness(0, 12, 0, 0) };
-            Grid.SetRow(_navBottom, 2);
-            g.Children.Add(_navBottom);
+            _navBottom = new StackPanel(); // kept for older callers; the global actions now live in the header
             BuildNavItems();
-            return g;
+            _navHost = new Border { Child = g, Width = NavOpenWidth, ClipToBounds = true };
+            return _navHost;
+        }
+
+        /// <summary>Animates the menu width and the title. In lite mode it just jumps.</summary>
+        private void AnimateNav(bool closed, bool animate)
+        {
+            if (_navHost == null) return;
+            double to = closed ? NavClosedWidth : NavOpenWidth;
+            // While closed the scroll bar would sit on top of the icons: hide it (the wheel still scrolls).
+            _navScroll.VerticalScrollBarVisibility = closed ? ScrollBarVisibility.Hidden : ScrollBarVisibility.Auto;
+            var tt = (TranslateTransform)_brand.RenderTransform;
+            if (!animate || Theme.Lite)
+            {
+                _navHost.BeginAnimation(WidthProperty, null);
+                _navHost.Width = to;
+                _brand.Visibility = closed ? Visibility.Collapsed : Visibility.Visible;
+                _brand.Opacity = 1; tt.X = 0;
+                return;
+            }
+            var d = TimeSpan.FromMilliseconds(160);
+            var ease = new System.Windows.Media.Animation.CubicEase { EasingMode = System.Windows.Media.Animation.EasingMode.EaseOut };
+            _navHost.BeginAnimation(WidthProperty, new System.Windows.Media.Animation.DoubleAnimation(to, d) { EasingFunction = ease });
+            _brand.Visibility = Visibility.Visible;
+            var fade = new System.Windows.Media.Animation.DoubleAnimation(closed ? 0 : 1, d) { EasingFunction = ease };
+            if (closed) fade.Completed += (_, __) => { if (Compact) _brand.Visibility = Visibility.Collapsed; };
+            _brand.BeginAnimation(OpacityProperty, fade);
+            tt.BeginAnimation(TranslateTransform.XProperty, new System.Windows.Media.Animation.DoubleAnimation(closed ? -12 : 0, d) { EasingFunction = ease });
+        }
+
+        private Button _gameModeButton;
+
+        /// <summary>Top right of the window: global actions as icons only (tooltips and screen-reader names).</summary>
+        private FrameworkElement BuildHeader()
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, HorizontalAlignment = HorizontalAlignment.Right, Margin = new Thickness(0, 6, 12, 6) };
+            Button IconButton(string icon, string name, Action onClick)
+            {
+                var b = Ui.Button("", "SubtleButton", onClick, icon, name);
+                b.Width = 40; b.Height = 40; b.Padding = new Thickness(0);
+                b.ToolTip = name;
+                b.Margin = new Thickness(4, 0, 0, 0);
+                return b;
+            }
+            _gameModeButton = IconButton(Icons.Gaming, Loc.S("Modo juego temporal", "Temporary game mode"), () => GameModeRequested?.Invoke());
+            row.Children.Add(_gameModeButton);
+            row.Children.Add(IconButton(Icons.Search, Loc.S("Buscar (Ctrl+K)", "Search (Ctrl+K)"), ShowPalette));
+            row.Children.Add(IconButton(Icons.Settings, Loc.S("Ajustes", "Settings"), () => Navigate("settings")));
+            row.Children.Add(IconButton(Icons.Help, Loc.S("Ayuda (F1)", "Help (F1)"), () => Navigate("help")));
+            _header = row;
+            return row;
+        }
+
+        private StackPanel _header;
+
+        /// <summary>Raised by the header's game mode button; the game mode feature subscribes to it.</summary>
+        public event Action GameModeRequested;
+
+        /// <summary>Lets the game mode feature show that it is on (accent icon).</summary>
+        public void SetGameModeIndicator(bool on)
+        {
+            if (_gameModeButton == null) return;
+            _gameModeButton.SetResourceReference(ForegroundProperty, on ? "AccentText" : "Fg");
+            var name = on ? Loc.S("Modo juego temporal: activo", "Temporary game mode: on") : Loc.S("Modo juego temporal", "Temporary game mode");
+            _gameModeButton.ToolTip = name;
+            AutomationProperties.SetName(_gameModeButton, name);
         }
 
         private void BuildNavItems()
         {
             _nav.Children.Clear();
-            _navBottom.Children.Clear();
             _navButtons.Clear();
-            _brand.Text = Compact ? "Oz" : "Optimizzzer";
+            _menuButton.ToolTip = Compact ? Loc.S("Expandir menú", "Expand menu") : Loc.S("Contraer menú", "Collapse menu");
+            AutomationProperties.SetName(_menuButton, _menuButton.ToolTip.ToString());
             AutomationProperties.SetName(_brand, "Optimizzzer");
             void Section(string text)
             {
                 if (Compact)
                 {
                     // Icons only: a thin line keeps the groups apart without words that would not fit.
-                    _nav.Children.Add(Ui.Divider(8, 8));
+                    var d = Ui.Divider(8, 8);
+                    d.Width = 32; d.HorizontalAlignment = HorizontalAlignment.Left; d.Margin = new Thickness(4, 8, 0, 8);
+                    _nav.Children.Add(d);
                     return;
                 }
                 var t = Ui.Muted(text, 12);
-                t.Margin = new Thickness(12, 12, 0, 4);
+                t.Margin = new Thickness(12, 14, 0, 4);
                 _nav.Children.Add(t);
             }
-            // Grouped by task: start and results first, then cleaning, then system parts, then tracking.
-            foreach (var k in new[] { "home", "wizard", "measure" }) AddNav(_nav, k);
+            // Grouped by task: start and results first, then cleaning, then system parts, then tracking, then the advanced zone.
+            foreach (var k in new[] { "home", "levels", "wizard", "measure" }) AddNav(_nav, k);
             Section(Loc.S("Limpiar y reparar", "Clean and repair"));
             foreach (var k in new[] { "cleanup", "apps", "repair" }) AddNav(_nav, k);
             Section(Loc.S("Sistema", "System"));
             foreach (var k in new[] { "startup", "services", "tasks", "dns" }) AddNav(_nav, k);
             Section(Loc.S("Seguimiento", "Tracking"));
             foreach (var k in new[] { "history", "drift" }) AddNav(_nav, k);
-
-            var search = NavAction(Icons.Search, Loc.S("Buscar", "Search"), ShowPalette, Loc.S("Buscar (Ctrl+K)", "Search (Ctrl+K)"), "Ctrl+K");
-            _navBottom.Children.Add(search);
-            AddNav(_navBottom, "settings");
-            AddNav(_navBottom, "help");
-            var collapse = NavAction(Icons.Menu, _state.NavCollapsed ? Loc.S("Expandir menú", "Expand menu") : Loc.S("Contraer menú", "Collapse menu"), ToggleNavCollapsed);
-            _navBottom.Children.Add(collapse);
+            if (_pages.Any(p => p.Key == "advanced"))
+            {
+                Section(Loc.S("Avanzado", "Advanced"));
+                AddNav(_nav, "advanced");
+            }
         }
 
         private void AddNav(Panel panel, string key)
         {
-            var page = _pages.First(p => p.Key == key);
+            var page = _pages.FirstOrDefault(p => p.Key == key);
+            if (page == null) return;
             var b = NavAction(page.Icon, page.Title, () => Navigate(key));
             _navButtons[key] = b;
             if (_current?.Key == key) MarkCurrent(b);
@@ -273,33 +402,33 @@ namespace Optimizzzer.App.Shell
 
         private static Button NavAction(string icon, string text, Action onClick, string name = null, string hint = null)
         {
+            Button b;
             if (Compact)
             {
-                // Icon only, with the name as tooltip and for screen readers.
-                var only = new Button { Content = Ui.Icon(icon, 18), Margin = new Thickness(0, 1, 0, 1), ToolTip = name ?? text, HorizontalContentAlignment = HorizontalAlignment.Center };
-                only.SetResourceReference(StyleProperty, "NavButton");
-                AutomationProperties.SetName(only, name ?? text);
-                only.Click += (_, __) => onClick();
-                return only;
+                // Icon only, same 16 px as when open, centred in a 40 px square: never cut.
+                b = new Button { Content = Ui.Icon(icon, 16), Width = 40, Height = 40, HorizontalAlignment = HorizontalAlignment.Left, HorizontalContentAlignment = HorizontalAlignment.Center, Margin = new Thickness(0, 1, 0, 1), ToolTip = name ?? text };
             }
-            var g = new Grid();
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            g.ColumnDefinitions.Add(new ColumnDefinition());
-            g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            var label = Ui.Text(text, 14, false, "Fg", wrap: false);
-            label.Margin = new Thickness(12, 0, 8, 0);
-            label.VerticalAlignment = VerticalAlignment.Center;
-            Grid.SetColumn(label, 1);
-            g.Children.Add(Ui.Icon(icon, 16));
-            g.Children.Add(label);
-            if (hint != null)
+            else
             {
-                var h = Ui.Text(hint, 12, false, "FgMuted", wrap: false);
-                h.VerticalAlignment = VerticalAlignment.Center;
-                Grid.SetColumn(h, 2);
-                g.Children.Add(h);
+                var g = new Grid();
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                g.ColumnDefinitions.Add(new ColumnDefinition());
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var label = Ui.Text(text, 14, false, "Fg", wrap: false);
+                label.Margin = new Thickness(12, 0, 8, 0);
+                label.VerticalAlignment = VerticalAlignment.Center;
+                Grid.SetColumn(label, 1);
+                g.Children.Add(Ui.Icon(icon, 16));
+                g.Children.Add(label);
+                if (hint != null)
+                {
+                    var h = Ui.Text(hint, 12, false, "FgMuted", wrap: false);
+                    h.VerticalAlignment = VerticalAlignment.Center;
+                    Grid.SetColumn(h, 2);
+                    g.Children.Add(h);
+                }
+                b = new Button { Content = g, Margin = new Thickness(0, 1, 0, 1), MinHeight = 38 };
             }
-            var b = new Button { Content = g, Margin = new Thickness(0, 1, 0, 1) };
             b.SetResourceReference(StyleProperty, "NavButton");
             AutomationProperties.SetName(b, name ?? text);
             b.Click += (_, __) => onClick();
@@ -349,7 +478,7 @@ namespace Optimizzzer.App.Shell
         /// <summary>Pages that show tweak status are rebuilt after anything changed the system.</summary>
         public void InvalidateScanViews(AppPage except = null)
         {
-            foreach (var p in _pages.Where(p => (p is HomePage || p is WizardPage) && p != except))
+            foreach (var p in _pages.Where(p => (p is HomePage || p is WizardPage || p is LevelsPage) && p != except))
             {
                 p.Invalidate();
                 if (p == _current) { ShowView(p.View); p.OnShown(); }
@@ -571,7 +700,7 @@ namespace Optimizzzer.App.Shell
             foreach (var p in _pages)
                 list.Add(new Command { Icon = p.Icon, Title = p.Title, Subtitle = Loc.S("Ir a la página", "Go to page"), Run = () => Navigate(p.Key) });
             foreach (var l in Levels.All)
-                list.Add(new Command { Icon = Icons.Play, Title = Loc.S("Aplicar el nivel " + l.Name.Es, "Apply the " + l.Name.En + " level"), Subtitle = Loc.S(l.Tagline), Run = () => { Navigate("home"); PageOf<HomePage>().OpenLevel(l.Level); } });
+                list.Add(new Command { Icon = Icons.Play, Title = Loc.S("Aplicar el nivel " + l.Name.Es, "Apply the " + l.Name.En + " level"), Subtitle = Loc.S(l.Tagline), Run = () => PageOf<LevelsPage>().OpenLevel(l.Level) });
             list.Add(new Command { Icon = Icons.Undo, Title = Loc.S("Deshacer la última sesión", "Undo the last session"), Subtitle = Loc.S("Historial", "History"), Run = () => { Navigate("home"); PageOf<HomePage>().UndoLast(); } });
             list.Add(new Command { Icon = Icons.FullScreen, Title = Loc.S("Pantalla completa", "Full screen"), Subtitle = "F11", Run = ToggleFullScreen });
             list.Add(new Command { Icon = Icons.Menu, Title = Loc.S("Contraer o expandir el menú", "Collapse or expand the menu"), Subtitle = Loc.S("Más espacio para el contenido", "More room for content"), Run = ToggleNavCollapsed });

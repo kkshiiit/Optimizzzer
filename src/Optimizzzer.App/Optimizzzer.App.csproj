@@ -14,7 +14,8 @@
     <PlatformTarget>AnyCPU</PlatformTarget>
     <Prefer32Bit>false</Prefer32Bit>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
-    <Version>1.2.0</Version>
+    <Version>1.3.0</Version>
+    <ApplicationIcon>Resources\app.ico</ApplicationIcon>
     <Product>Optimizzzer</Product>
     <Description>Windows 10/11 optimizer</Description>
     <Copyright>Optimizzzer contributors</Copyright>
@@ -25,6 +26,7 @@
     <Compile Include="..\Optimizzzer.Core\**\*.cs" Exclude="..\Optimizzzer.Core\obj\**;..\Optimizzzer.Core\bin\**" LinkBase="Core" />
     <Compile Include="..\Optimizzzer.Windows\**\*.cs" Exclude="..\Optimizzzer.Windows\obj\**;..\Optimizzzer.Windows\bin\**" LinkBase="Windows" />
     <EmbeddedResource Include="Resources\Styles.xaml" LogicalName="Optimizzzer.Styles.xaml" />
+    <EmbeddedResource Include="Resources\app.ico" LogicalName="Optimizzzer.app.ico" />
   </ItemGroup>
   <ItemGroup>
     <Reference Include="PresentationCore" />

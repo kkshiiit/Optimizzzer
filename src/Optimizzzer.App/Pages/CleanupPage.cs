@@ -150,7 +150,7 @@ namespace Optimizzzer.App.Pages
                 {
                     var open = Ui.Subtle(Loc.S("Abrir", "Open"), () =>
                     {
-                        try { System.Diagnostics.Process.Start("explorer.exe", "\"" + path + "\""); } catch (Exception ex) { W.ShowError(ex.Message); }
+                        try { Launcher.Open(path); } catch (Exception ex) { W.ShowError(ex.Message); }
                     }, Icons.Folder, Loc.S("Abrir ", "Open ") + path);
                     var size = Ui.Text(Loc.Size(bytes), 14, true, "Fg", wrap: false);
                     size.VerticalAlignment = VerticalAlignment.Center;

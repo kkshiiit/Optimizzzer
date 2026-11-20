@@ -23,6 +23,8 @@ namespace Optimizzzer.App
         {
             // Must be set before any WPF type loads: lets WPF re-render crisply when moved between monitors with different scaling.
             AppContext.SetSwitch("Switch.System.Windows.DoNotScaleForDpiChanges", false);
+            // The exe usually runs from Downloads: never load a DLL placed next to it, only from System32.
+            Optimizzzer.Windows.SafeFolders.RestrictDllSearch();
 
             var cli = CliOptions.Parse(args);
             if (cli.Lang.HasValue) { Loc.Lang = cli.Lang.Value; AppState.LanguageFromCommandLine = true; }
@@ -52,7 +54,10 @@ namespace Optimizzzer.App
             Theme.Configure(state.SavedTheme, state.SavedAccent, state.SavedLite);
             Theme.WatchSystem();
             var window = new MainWindow(state);
-            return app.Run(window);
+            System.Threading.Tasks.Task.Run(() => Optimizzzer.Windows.MeasureAfterRestart.CleanupLeftovers(state.Win.Process));
+            var code = app.Run(window);
+            if (state.CleanOnExit && !state.DataDeleted) Optimizzzer.Windows.DataTraces.CleanOnExit(state.Win);
+            return code;
         }
 
         /// <summary>
@@ -101,7 +106,7 @@ namespace Optimizzzer.App
             };
             var watchdog = new Thread(() =>
             {
-                Thread.Sleep(TimeSpan.FromMinutes(9));
+                Thread.Sleep(TimeSpan.FromMinutes(14));
                 lock (log) log.AppendLine("SELFTEST TIMEOUT");
                 Flush();
                 Environment.Exit(2);
@@ -131,7 +136,13 @@ namespace Optimizzzer.App
                 if (fresh.ScanResults == null) throw new Exception("the home scan did not finish");
                 var workingSetMb = System.Diagnostics.Process.GetCurrentProcess().WorkingSet64 / 1024 / 1024;
                 log.AppendLine("  window visible after " + shownMs + " ms; working set after scan " + workingSetMb + " MB");
-                if (shownMs > 2000) throw new Exception("window took " + shownMs + " ms to appear (limit 2000)");
+                lock (MainWindow.StartupTrace) log.AppendLine("  startup: " + string.Join(", ", MainWindow.StartupTrace));
+                // A regression guard, not a benchmark: shared CI machines vary 2x between runs of the same commit, and
+                // ARM ones run the app under x64 emulation (so the OS architecture is checked, not the process's).
+                var arm = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64;
+                var limitMs = arm ? 6000 : 4000;
+                log.AppendLine("  OS architecture " + System.Runtime.InteropServices.RuntimeInformation.OSArchitecture + ", limit " + limitMs + " ms");
+                if (shownMs > limitMs) throw new Exception("window took " + shownMs + " ms to appear (limit " + limitMs + ")");
                 if (workingSetMb > 200) throw new Exception("working set " + workingSetMb + " MB (limit 200)");
                 Pump();
                 w.UpdateLayout();
@@ -183,7 +194,7 @@ namespace Optimizzzer.App
                         Loc.Lang = lang;
                         var w = new MainWindow(state) { ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
                         w.Show();
-                        bool shots = (theme == ThemeChoice.Light && lang == Lang.Es) || (theme == ThemeChoice.Dark && lang == Lang.En);
+                        bool shots = lang == Lang.Es; // the owner reviews the Spanish screens, in both themes (dark is the default)
                         void Verify(string what)
                         {
                             Pump();
@@ -198,6 +209,18 @@ namespace Optimizzzer.App
                             w.Navigate(p.Key);
                             Verify("page " + p.Key);
                         }
+                        // The advanced zone after accepting its notice: what is installed is read with PowerShell (slow,
+                        // so only in the passes that take screenshots).
+                        var adv = w.PageOf<Pages.AdvancedPage>();
+                        if (shots) {
+                        adv.AcceptForTest();
+                        w.Navigate("advanced");
+                        var advUntil = DateTime.Now.AddSeconds(90);
+                        while (!adv.LoadedForTest && DateTime.Now < advUntil) Pump();
+                        if (!adv.LoadedForTest) throw new Exception("the advanced zone did not finish reading");
+                        Verify("page advanced accepted");
+                        state.RiskAccepted = false;
+                        }
                         // Pick the recommended profile so the selection and review steps have content.
                         foreach (var t in Profiles.Select(state.ScanResults, Profiles.Recommend(state.Ctx.Info), state.Ctx.Info)) state.Selected.Add(t.Id);
                         w.Navigate("wizard");
@@ -209,9 +232,11 @@ namespace Optimizzzer.App
                         Pump();
                         foreach (var level in new[] { Level.Quick, Level.Maximum })
                         {
-                            w.PageOf<Pages.HomePage>().OpenLevel(level);
-                            if (w.OverlayOpen) { Verify("level sheet " + level); w.CloseOverlay(); }
+                            var levels = w.PageOf<Pages.LevelsPage>();
+                            levels.OpenLevel(level);
+                            if (levels.ShowingPreviewForTest) Verify("level sheet " + level);
                             else log.AppendLine("  level " + level + ": nothing to apply here");
+                            levels.CloseForTest();
                         }
                         w.ShowPalette();
                         if (!w.OverlayOpen) throw new Exception("Ctrl+K palette did not open");
@@ -242,20 +267,22 @@ namespace Optimizzzer.App
                     var name = "Size-" + width + "x" + height;
                     log.AppendLine("  " + name + ": compact menu " + MainWindow.Compact);
                     SelfTestTools.Screenshot(w, name + "-home");
-                    var home = w.PageOf<Pages.HomePage>();
-                    home.OpenLevel(Level.Maximum);
-                    if (w.OverlayOpen)
+                    var levelsPage = w.PageOf<Pages.LevelsPage>();
+                    w.Navigate("levels");
+                    Pump(); Pump();
+                    SelfTestTools.Screenshot(w, name + "-levels");
+                    levelsPage.OpenLevel(Level.Maximum);
+                    if (levelsPage.ShowingPreviewForTest)
                     {
-                        home.SheetDetailsForTest.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                         Pump(); Pump(); Pump();
                         w.UpdateLayout();
                         var root = (FrameworkElement)w.Content;
-                        var apply = home.SheetApplyForTest;
+                        var apply = levelsPage.ApplyForTest;
                         var box = apply.TransformToAncestor(root).TransformBounds(new Rect(apply.RenderSize));
                         if (box.Bottom > root.ActualHeight + 0.5 || box.Right > root.ActualWidth + 0.5 || box.Top < 0)
                             throw new Exception(name + ": the Apply button is outside the window (" + box + " in " + root.ActualWidth + "x" + root.ActualHeight + ")");
                         SelfTestTools.Screenshot(w, name + "-level-sheet-Maximum");
-                        w.CloseOverlay();
+                        levelsPage.CloseForTest();
                     }
                     w.Navigate("wizard");
                     Pump(); Pump();
@@ -279,6 +306,30 @@ namespace Optimizzzer.App
                 if (w.IsFullScreen || w.WindowStyle != WindowStyle.SingleBorderWindow || w.WindowState != WindowState.Normal) throw new Exception("F11 did not restore the window");
                 w.Close();
             });
+
+            // Temporary game mode on a throwaway machine: plan and Windows Update pause change, then come back exactly.
+            if (Environment.GetEnvironmentVariable("OPTIMIZZZER_SELFTEST_APPLY") == "1")
+                Check("temporary game mode on and off", () =>
+                {
+                    var w = new MainWindow(state) { ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
+                    w.Show();
+                    state.EnsureReadyAsync().GetAwaiter().GetResult();
+                    string Read(string n) => state.Ctx.Registry.GetValue(Optimizzzer.Core.Hive.LocalMachine, GameSession.WuKey, n)?.Data as string;
+                    var schemeBefore = GameSession.ActiveScheme(state.Ctx);
+                    var pauseBefore = Read("PauseUpdatesExpiryTime");
+                    var t = w.GameMode.StartForTestAsync();
+                    while (!t.IsCompleted) Pump();
+                    var st = t.GetAwaiter().GetResult();
+                    log.AppendLine("  plan " + schemeBefore + " -> " + GameSession.ActiveScheme(state.Ctx) + ", pause until " + Read("PauseUpdatesExpiryTime") + ", plan changed " + st.SchemeChanged);
+                    if (!st.UpdatesPaused || Read("PauseUpdatesExpiryTime") == null) throw new Exception("updates were not paused");
+                    var stop = w.GameMode.StopAsync();
+                    while (!stop.IsCompleted) Pump();
+                    stop.GetAwaiter().GetResult();
+                    if (GameSession.ActiveScheme(state.Ctx) != schemeBefore) throw new Exception("power plan not restored");
+                    if (Read("PauseUpdatesExpiryTime") != pauseBefore) throw new Exception("pause values not restored");
+                    if (System.IO.File.Exists(System.IO.Path.Combine(state.Win.DataDir, "gamemode.txt"))) throw new Exception("state file left behind");
+                    w.Close();
+                });
 
             // Only on a throwaway machine (CI sets this variable): apply two tweaks through the wizard UI, then undo them.
             if (Environment.GetEnvironmentVariable("OPTIMIZZZER_SELFTEST_APPLY") == "1")

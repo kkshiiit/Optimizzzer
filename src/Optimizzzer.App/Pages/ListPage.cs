@@ -29,6 +29,8 @@ namespace Optimizzzer.App.Pages
         protected abstract bool Matches(T item, string query);
         protected abstract FrameworkElement RowFor(T item);
         protected virtual FrameworkElement Toolbar() => null;
+        /// <summary>Optional row above the search box (for example tabs), with its own spacing.</summary>
+        protected virtual FrameworkElement TopBar() => null;
         protected virtual string EmptyText => Loc.S("No hay elementos.", "There are no items.");
         protected virtual IEnumerable<T> Filtered(IEnumerable<T> items) => items;
         /// <summary>Optional main action in the footer (for example "Uninstall 3 programs").</summary>
@@ -62,10 +64,12 @@ namespace Optimizzzer.App.Pages
 
             var search = Ui.SearchBox(SearchHint, q => { Query = q; Refill(); });
             search.Box.Text = Query;
-            var bar = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+            // Gaps on the right and bottom of each item, so a wrapped second line starts flush left.
+            var bar = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
+            search.Margin = new Thickness(0, 0, 16, 8);
             bar.Children.Add(search);
             var extra = Toolbar();
-            if (extra != null) { extra.Margin = new Thickness(16, 0, 0, 0); extra.VerticalAlignment = VerticalAlignment.Center; bar.Children.Add(extra); }
+            if (extra != null) { extra.Margin = new Thickness(0, 0, 0, 8); extra.VerticalAlignment = VerticalAlignment.Center; bar.Children.Add(extra); }
 
             _list = new StackPanel();
             _empty = Ui.Empty(EmptyText);
@@ -74,7 +78,8 @@ namespace Optimizzzer.App.Pages
             var g = new Grid();
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             g.RowDefinitions.Add(new RowDefinition());
-            g.Children.Add(bar);
+            var top = TopBar();
+            g.Children.Add(top == null ? (UIElement)bar : Ui.Stack(12, top, bar));
             var scroll = new ScrollViewer { Content = _list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, CanContentScroll = false, Focusable = false };
             Grid.SetRow(scroll, 1);
             g.Children.Add(scroll);

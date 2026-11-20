@@ -46,6 +46,13 @@ namespace Optimizzzer.App.Shell
         public const string Help = "\uE897";
         public const string Export = "\uEDE1";
         public const string More = "\uE712";
+        public const string Processor = "\uE9F5";  // Processing
+        public const string Memory = "\uEEA0";     // Memory chip
+        public const string Disk = "\uEDA2";       // Hard drive
+        public const string Display = "\uE7F4";    // Monitor
+        public const string Board = "\uE950";      // Component
+        public const string Windows = "\uE770";    // System
+        public const string Web = "\uE774";        // Globe: search the internet
         public const string FullScreen = "\uE740";
         public const string BackToWindow = "\uE73F";
         public const string Menu = "\uE700";       // Collapse or expand the navigation menu
@@ -81,6 +88,8 @@ namespace Optimizzzer.App.Shell
         public const string Save = "";
         public const string Restart = "";     // Refresh
         public const string Shield = "";
+        public const string Pause = "\uE769";
+        public const string Download = "\uE896";
         public const string Play = "";
         public const string Stop = "";
 
@@ -92,6 +101,8 @@ namespace Optimizzzer.App.Shell
                 case Category.WindowsAI: return WindowsAI;
                 case Category.Performance: return Performance;
                 case Category.Gaming: return Gaming;
+                case Category.Input: return Keyboard;
+                case Category.Visual: return Theme;
                 case Category.Power: return Power;
                 case Category.Interface: return Interface;
                 case Category.Update: return Update;
@@ -126,6 +137,8 @@ namespace Optimizzzer.App.Shell
                 case Category.WindowsAI: return Loc.S("IA y widgets", "AI and widgets");
                 case Category.Performance: return Loc.S("Rendimiento", "Performance");
                 case Category.Gaming: return Loc.S("Juegos", "Gaming");
+                case Category.Input: return Loc.S("Teclado y ratón", "Keyboard and mouse");
+                case Category.Visual: return Loc.S("Efectos visuales", "Visual effects");
                 case Category.Power: return Loc.S("Energía", "Power");
                 case Category.Interface: return Loc.S("Interfaz y Explorador", "Interface and Explorer");
                 case Category.Update: return Loc.S("Windows Update", "Windows Update");
@@ -172,6 +185,8 @@ namespace Optimizzzer.App.Shell
 
         public static TextBlock Text(string text, double size = 14, bool semibold = false, string brush = "Fg", bool wrap = true)
         {
+            // Small print reads better a half step up (owner request): 12 becomes 13 everywhere.
+            if (size == 12) size = 13;
             var t = new TextBlock
             {
                 Text = text,
@@ -216,7 +231,7 @@ namespace Optimizzzer.App.Shell
             return Stack(0, t, more);
         }
 
-        public static TextBlock H1(string text) { var t = Text(text, 28, true); t.Margin = new Thickness(0, 0, 0, 4); return t; }
+        public static TextBlock H1(string text) { var t = Text(text, 26, true); t.Margin = new Thickness(0, 0, 0, 4); return t; }
         public static TextBlock H2(string text) { var t = Text(text, 20, true); t.Margin = new Thickness(0, 0, 0, 4); return t; }
         public static TextBlock H3(string text) { var t = Text(text, 16, true); return t; }
         public static TextBlock Muted(string text, double size = 14) => Text(text, size, false, "FgMuted");
@@ -312,9 +327,9 @@ namespace Optimizzzer.App.Shell
 
         public static Border Panel(UIElement child, double padding = 24)
         {
-            var b = new Border { CornerRadius = new CornerRadius(8), Padding = new Thickness(padding), Child = child, BorderThickness = new Thickness(1) };
-            b.SetResourceReference(Border.BackgroundProperty, "Surface");
-            b.SetResourceReference(Border.BorderBrushProperty, "Divider");
+            // A quiet filled area, no outline: sections read as groups without boxes inside boxes.
+            var b = new Border { CornerRadius = new CornerRadius(10), Padding = new Thickness(padding), Child = child };
+            b.SetResourceReference(Border.BackgroundProperty, "SurfaceAlt");
             return b;
         }
 
@@ -332,7 +347,7 @@ namespace Optimizzzer.App.Shell
         public static FrameworkElement Chip(string icon, string text, string brush = "FgMuted", string tooltip = null)
         {
             var row = Row(4, Icon(icon, 12, brush), Text(text, 12, false, brush, wrap: false));
-            var b = new Border { Child = row, Padding = new Thickness(8, 2, 8, 2), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 6, 0) };
+            var b = new Border { Child = row, Padding = new Thickness(8, 2, 8, 2), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 6, 0), HorizontalAlignment = HorizontalAlignment.Left };
             b.SetResourceReference(Border.BackgroundProperty, "SurfaceAlt");
             if (tooltip != null) b.ToolTip = tooltip;
             AutomationProperties.SetName(b, text);

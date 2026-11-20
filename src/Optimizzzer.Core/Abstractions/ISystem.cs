@@ -114,5 +114,15 @@ namespace Optimizzzer.Core
         public IAppxManager Appx { get; set; }
         public IRestorePoint RestorePoint { get; set; }
         public ISystemInfo Info { get; set; }
+        /// <summary>SystemParametersInfo: settings Windows applies at once (mouse, keyboard, visual effects). May be null in tests.</summary>
+        public ISystemParameters Spi { get; set; }
+    }
+
+    /// <summary>Reads and writes one SystemParametersInfo setting; writing also saves it to the user profile.</summary>
+    public interface ISystemParameters
+    {
+        int? Get(uint getAction);
+        /// <param name="viaUiParam">Some settings take the value in uiParam, others in pvParam.</param>
+        void Set(uint setAction, bool viaUiParam, int value);
     }
 }

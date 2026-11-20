@@ -16,7 +16,13 @@ Other optimizers apply the changes below. Optimizzzer does not, because there is
 | Disable Prefetch | `EnablePrefetcher` | Slower app and boot times, especially on HDDs. |
 | Disable memory compression | `Disable-MMAgent -MemoryCompression` | More paging to disk on PCs with little RAM. |
 | Disable Windows Update service | `wuauserv` | It leaves the PC without security patches. Optimizzzer offers safe controls instead (no auto-restart, stay on a version). |
-| Disable Windows Defender | various | It removes the only antivirus most people have. |
-| Remove Microsoft Edge | various | It breaks WebView2 apps and Windows features, and Windows reinstalls it. |
+| Disable Windows Defender | various | Never part of a level or a normal tweak: it removes the only antivirus most people have. It is only offered in the "At your own risk" zone, with the steps Windows requires (Tamper Protection off by hand) and a way back. |
+| Remove Microsoft Edge | various | Never part of a level or a normal tweak: some apps and Windows features rely on it. It is only offered in the "At your own risk" zone with the official uninstaller; WebView2 is kept. |
 | Disable TabletInputService | `TabletInputService` | It breaks the emoji panel, the touch keyboard and some input methods. |
 | Global "disable fullscreen optimizations" | `GameDVR_FSEBehaviorMode` | It blocks the modern flip model and often increases latency on Windows 11. |
+| Mouse and keyboard buffer size | `MouseDataQueueSize`, `KeyboardDataQueueSize` | Popular on TikTok and forums, but there is no controlled measurement of any gain; games that use raw input bypass this buffer, and too small a value drops input. |
+| Timer resolution, HPET, `useplatformclock` | `bcdedit /set useplatformclock`, timer tools | Results are contradictory and often worse latency; Windows 11 already manages timer resolution per process. |
+| Disable Spectre and Meltdown mitigations | `FeatureSettingsOverride` | A small gain on old CPUs for a serious security hole. |
+| "Free RAM" tools and tweaks | various | Windows uses free RAM as cache on purpose; emptying it makes the next load slower. |
+| Disable IPv6 | `DisabledComponents` | Microsoft does not support it; it breaks some Windows features and does not speed up the connection. |
+

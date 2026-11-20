@@ -16,7 +16,7 @@ namespace Optimizzzer.App.Pages
         public override string Title => Loc.S("Ajustes", "Settings");
         public override string Icon => Icons.Settings;
 
-        private static FrameworkElement Segmented<T>(string name, (T Value, string Label)[] options, T current, Action<T> onPick)
+        internal static FrameworkElement Segmented<T>(string name, (T Value, string Label)[] options, T current, Action<T> onPick)
         {
             var row = new StackPanel { Orientation = Orientation.Horizontal };
             AutomationProperties.SetName(row, name);
@@ -48,6 +48,41 @@ namespace Optimizzzer.App.Pages
             return b;
         }
 
+        /// <summary>"Data and traces": what the app keeps, why, and how to leave nothing behind.</summary>
+        private FrameworkElement DataSection()
+        {
+            var items = Optimizzzer.Windows.DataTraces.Inventory(S.Win);
+            var list = Ui.Stack(6, items.Select(i => (UIElement)Ui.Row(10,
+                Ui.Icon(i.NeededToUndo ? Icons.Undo : Icons.Info, 14, i.NeededToUndo ? "AccentText" : "FgMuted"),
+                Ui.Text(Loc.S(i.Name) + " · " + Loc.Size(i.Bytes), 13, true),
+                Ui.Muted(Loc.S(i.Why), 13))).ToArray());
+            if (items.Count == 0) list.Children.Add(Ui.Muted(Loc.S("No hay datos guardados todavía.", "Nothing is saved yet."), 13));
+
+            var clean = new CheckBox { Content = Ui.Text(Loc.S("Borrar todo al cerrar si no queda nada por deshacer (se conservan solo estos ajustes)", "Delete everything on close if nothing is left to undo (only these settings are kept)")), IsChecked = S.CleanOnExit };
+            clean.Checked += (_, __) => { S.CleanOnExit = true; S.SaveSettings(); };
+            clean.Unchecked += (_, __) => { S.CleanOnExit = false; S.SaveSettings(); };
+
+            var wipe = Ui.Secondary(Loc.S("Borrar todos los datos de Optimizzzer", "Delete all Optimizzzer data"), async () =>
+            {
+                var undo = Optimizzzer.Windows.DataTraces.HasUndo(S.Win);
+                if (!await W.Confirm(Loc.S("¿Borrar todos los datos?", "Delete all data?"),
+                    (undo ? Loc.S("Tienes cambios que todavía se pueden deshacer. Si borras los datos, ya no podrás deshacerlos desde Optimizzzer (el punto de restauración de Windows sigue sirviendo). ", "You have changes that can still be undone. If you delete the data, you can no longer undo them from Optimizzzer (the Windows restore point still works). ") : "") +
+                    Loc.S("Se borran la carpeta de datos y la tarea de medición, si existe. La app se cierra al terminar.", "The data folder and the measurement task, if any, are deleted. The app closes when done."),
+                    Loc.S("Borrar y cerrar", "Delete and close"), danger: true)) return;
+                await System.Threading.Tasks.Task.Run(() => Optimizzzer.Windows.DataTraces.DeleteAll(S.Win));
+                S.DataDeleted = true;
+                W.Close();
+            }, Icons.Cleanup);
+            wipe.SetResourceReference(Control.ForegroundProperty, "Advanced");
+
+            var box = Ui.Stack(12, Ui.H3(Loc.S("Datos y rastros", "Data and traces")),
+                Ui.Muted(Loc.S("Todo lo que Optimizzzer deja está en una sola carpeta, más una tarea solo si programas una medición tras reiniciar. No instala nada ni escribe en otros sitios. Lo marcado con la flecha hace falta para deshacer.",
+                    "Everything Optimizzzer leaves is in one folder, plus a task only if you schedule a measurement after restart. It installs nothing and writes nowhere else. Items with the arrow are needed to undo."), 13),
+                list, clean, Ui.Row(8, wipe));
+            box.Margin = new Thickness(0, 12, 0, 24);
+            return box;
+        }
+
         protected override FrameworkElement Build()
         {
             void Changed() { S.SaveSettings(); W.RebuildAll(); }
@@ -75,6 +110,9 @@ namespace Optimizzzer.App.Pages
                 swatches.Children.Add(rb);
             }
 
+            var scale = Segmented(Loc.S("Tamaño del texto", "Text size"), new[] { (100, "100 %"), (115, "115 %"), (130, "130 %") }, S.TextScale,
+                v => { S.TextScale = v; S.SaveSettings(); W.ApplyTextScale(); });
+
             var lang = Segmented(Loc.S("Idioma", "Language"), new[] { (Lang.Es, "Español"), (Lang.En, "English") }, Loc.Lang, v => { Loc.Lang = v; Changed(); });
 
             var lite = Segmented(Loc.S("Modo ligero", "Lite mode"), new[]
@@ -88,7 +126,7 @@ namespace Optimizzzer.App.Pages
             var tour = Ui.Secondary(Loc.S("Ver el recorrido", "Show the tour"), W.ShowTour, Icons.Play);
             var data = Ui.Secondary(Loc.S("Abrir carpeta", "Open folder"), () =>
             {
-                try { System.IO.Directory.CreateDirectory(S.Win.DataDir); System.Diagnostics.Process.Start("explorer.exe", "\"" + S.Win.DataDir + "\""); }
+                try { System.IO.Directory.CreateDirectory(S.Win.DataDir); Launcher.Open(S.Win.DataDir); }
                 catch (Exception ex) { W.ShowError(ex.Message); }
             }, Icons.Folder);
 
@@ -96,6 +134,7 @@ namespace Optimizzzer.App.Pages
             var body = Ui.Stack(0,
                 Setting(Loc.S("Tema", "Theme"), Loc.S("\"Sistema\" sigue el modo claro u oscuro de Windows.", "\"System\" follows Windows light or dark mode."), theme),
                 Setting(Loc.S("Color de acento", "Accent color"), Loc.S("Ahora: ", "Now: ") + accentName + Loc.S(". Se ajusta solo para que el texto siempre se lea bien.", ". Adjusted automatically so text always stays readable."), swatches),
+                Setting(Loc.S("Tamaño del texto", "Text size"), Loc.S("Agranda letras, iconos y botones juntos, para que nada se corte.", "Enlarges text, icons and buttons together, so nothing is cut off."), scale),
                 Setting(Loc.S("Idioma", "Language"), null, lang),
                 Setting(Loc.S("Modo ligero", "Lite mode"), Loc.S("Quita animaciones y sombras para que vaya fluido en equipos modestos. ", "Removes animations and shadows so it stays smooth on modest PCs. ") + liteState, lite),
                 Setting(Loc.S("Ventana", "Window"), Loc.S("Pantalla completa con F11. El menú se reduce a iconos solo cuando la ventana es estrecha, o siempre si lo contraes.",
@@ -103,6 +142,7 @@ namespace Optimizzzer.App.Pages
                     Ui.Row(8, Ui.Secondary(Loc.S("Contraer menú", "Collapse menu"), W.ToggleNavCollapsed, Icons.Menu), Ui.Secondary(Loc.S("Pantalla completa", "Full screen"), W.ToggleFullScreen, Icons.FullScreen))),
                 Setting(Loc.S("Recorrido de bienvenida", "Welcome tour"), Loc.S("Tres pasos que explican cómo funciona.", "Three steps that explain how it works."), tour),
                 Setting(Loc.S("Datos de Optimizzzer", "Optimizzzer data"), Loc.S("Historial para deshacer, mediciones y estos ajustes, en ", "Undo history, measurements and these settings, in ") + S.Win.DataDir, data),
+                DataSection(),
                 Ui.Muted("Optimizzzer " + version.Major + "." + version.Minor + "." + version.Build + " · MIT", 12));
             return Frame(null, body);
         }

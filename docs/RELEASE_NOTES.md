@@ -1,3 +1,17 @@
+**Novedades en 1.3**
+- Menú nuevo: botón ≡ a la izquierda del título, que se desliza al contraer; iconos que nunca se cortan; Buscar, Ajustes y Ayuda arriba a la derecha, solo con icono. Icono propio del programa y texto un poco más grande, con tamaño 100, 115 o 130 % en Ajustes.
+- Inicio muestra tu equipo: procesador, gráficas, RAM (velocidad, módulos y aviso de canal simple), discos, pantalla (aviso si va a menos Hz de los que admite), placa y Windows.
+- Página Niveles: qué es cada nivel con un ejemplo, la escalera Rápido, Equilibrado, Juegos y Máximo (Juegos está dentro de Máximo), y una vista completa de cada cambio antes de aplicar, con consejo de reinicio.
+- 25 ajustes nuevos con evidencia: teclado y ratón (repetición de teclas, velocidad 1:1, avisos de accesibilidad), efectos visuales (contenido al arrastrar, rectángulo de selección, fundidos, sombras, desplazamiento suave), menú contextual clásico, Explorador en Este equipo, suspensión USB y PCIe, gráfica dedicada por juego, Integridad de memoria y Plataforma de máquina virtual (avanzados).
+- Modo juego temporal desde la cabecera: pausa Windows Update un día, usa Alto rendimiento y cierra las apps en segundo plano que marques. Al desactivarlo todo vuelve como estaba.
+- Servicios y Tareas dicen qué tocar: guía de unos 50 servicios, servicios cambiados por un nivel en verde, impacto de desactivar cada tarea y búsqueda en internet con tu navegador y tu buscador.
+- Programas y apps con el icono de cada programa, ficha de detalle y más aire. Programas de inicio con lanzadores de juegos agrupados.
+- 9 reparaciones nuevas: índice de búsqueda, hora, cola de impresión, proxy, audio, planes de energía, contadores de rendimiento, WMI y Defender.
+- Mediciones de 10, 30 o 60 s con media y pico, gráfico de tendencia con marcas de "después" y borrado automático a los 7 días (salvo lo exportado a CSV).
+- Zona aparte **Bajo tu responsabilidad**: quitar Copilot, Xbox, Edge o la Store, desactivar Defender y pausar Windows Update hasta unos 20 años, con aviso que hay que aceptar, copia completa del registro y cada acción guardable como script `.ps1`. Ver docs/RESPONSABILIDAD.md.
+- Ajustes > Datos y rastros: qué guarda la app y por qué, borrar todo al cerrar si no queda nada por deshacer, o borrarlo todo.
+- Seguridad: las webs y carpetas se abren sin permisos de administrador, la tarea de medición usa una copia protegida del programa, las DLL solo se cargan de System32 y la carpeta de datos es solo para administradores.
+
 **Novedades en 1.2**
 - La ventana se adapta a cualquier pantalla: ya no se esconde la barra de título en portátiles de 768 px, F11 pone pantalla completa y el menú se reduce a iconos en ventanas estrechas.
 - Las hojas de cada nivel nunca se cortan: el botón Aplicar queda siempre visible y la lista se desplaza.

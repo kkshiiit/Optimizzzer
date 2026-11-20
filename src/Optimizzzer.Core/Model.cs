@@ -25,6 +25,8 @@ namespace Optimizzzer.Core
         WindowsAI,
         Performance,
         Gaming,
+        Input,
+        Visual,
         Power,
         Interface,
         Update,
