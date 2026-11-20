@@ -185,7 +185,7 @@ namespace Optimizzzer.App
                         Loc.Lang = lang;
                         var w = new MainWindow(state) { ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
                         w.Show();
-                        bool shots = (theme == ThemeChoice.Light && lang == Lang.Es) || (theme == ThemeChoice.Dark && lang == Lang.En);
+                        bool shots = lang == Lang.Es; // the owner reviews the Spanish screens, in both themes (dark is the default)
                         void Verify(string what)
                         {
                             Pump();
