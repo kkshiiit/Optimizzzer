@@ -18,7 +18,11 @@ namespace Optimizzzer.Core
         public override ActionSnapshot Snapshot(SystemContext ctx)
         {
             var current = ctx.Services.GetStartMode(Service);
-            return new ActionSnapshot { Kind = "svc", Existed = current != null, Data = current?.ToString() };
+            return new ActionSnapshot
+            {
+                Kind = "svc", Existed = current != null, Data = current?.ToString(),
+                WasRunning = current != null && ctx.Services.IsRunning(Service),
+            };
         }
 
         public override void Apply(SystemContext ctx)
@@ -31,7 +35,10 @@ namespace Optimizzzer.Core
         public override void Revert(SystemContext ctx, ActionSnapshot s)
         {
             if (!s.Existed || !ctx.Services.Exists(Service)) return;
-            ctx.Services.SetStartMode(Service, (StartMode)Enum.Parse(typeof(StartMode), s.Data));
+            var mode = (StartMode)Enum.Parse(typeof(StartMode), s.Data);
+            ctx.Services.SetStartMode(Service, mode);
+            // Disabling stopped it; undo brings it back to work right away instead of after a reboot.
+            if (s.WasRunning && mode != StartMode.Disabled) ctx.Services.Start(Service);
         }
 
         public override string Describe(Lang lang) =>
@@ -104,6 +111,22 @@ namespace Optimizzzer.Core
 
         public override string Describe(Lang lang) =>
             (lang == Lang.En ? "Uninstall app " : "Desinstalar app ") + PackageName;
+    }
+
+    /// <summary>An action that only exists on Windows 10 or only on Windows 11; on the other one it does not apply.</summary>
+    public sealed class OsOnlyAction : TweakAction
+    {
+        public OsOnlyAction(OsFilter os, TweakAction inner) { Os = os; Inner = inner; }
+        public OsFilter Os { get; }
+        public TweakAction Inner { get; }
+        private bool Matches(SystemContext c) => c.Info == null || (Os & (c.Info.IsWin11 ? OsFilter.Win11 : OsFilter.Win10)) != 0;
+        public override bool Reversible => Inner.Reversible;
+        public override ActionState Detect(SystemContext ctx) => Matches(ctx) ? Inner.Detect(ctx) : ActionState.NotApplicable;
+        public override ActionSnapshot Snapshot(SystemContext ctx) => Inner.Snapshot(ctx);
+        public override void Apply(SystemContext ctx) => Inner.Apply(ctx);
+        public override void Revert(SystemContext ctx, ActionSnapshot s) => Inner.Revert(ctx, s);
+        // Same text as the inner action, so undo still matches journals written by v1.0.x.
+        public override string Describe(Lang lang) => Inner.Describe(lang);
     }
 
     /// <summary>For changes that are not plain registry, service or task edits (powercfg, bcdedit, ...).</summary>

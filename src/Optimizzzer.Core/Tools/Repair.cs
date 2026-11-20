@@ -25,6 +25,8 @@ namespace Optimizzzer.Core.Tools
         /// <summary>The runner starts File Explorer again (unelevated) after the steps.</summary>
         public bool RestartsExplorer { get; set; }
         public IList<RepairStep> Steps { get; set; } = new List<RepairStep>();
+        /// <summary>Steps that put the system back in working order. They run even after a failure or Cancel.</summary>
+        public IList<RepairStep> CleanupSteps { get; set; } = new List<RepairStep>();
     }
 
     public static class RepairCatalog
@@ -71,9 +73,13 @@ namespace Optimizzzer.Core.Tools
                     new RepairStep("cmd.exe", "/c ren %SystemRoot%\\SoftwareDistribution SoftwareDistribution.old"),
                     new RepairStep("cmd.exe", "/c if exist %SystemRoot%\\System32\\catroot2.old rd /s /q %SystemRoot%\\System32\\catroot2.old", tolerateExitCode: true),
                     new RepairStep("cmd.exe", "/c ren %SystemRoot%\\System32\\catroot2 catroot2.old"),
-                    new RepairStep("net.exe", "start cryptsvc"),
-                    new RepairStep("net.exe", "start bits"),
-                    new RepairStep("net.exe", "start wuauserv"),
+                },
+                // Already running counts as success; any other failure to start is reported, so "Finished" is never shown with the service stopped.
+                CleanupSteps =
+                {
+                    new RepairStep("cmd.exe", "/c sc query cryptsvc | find \"RUNNING\" >nul || net start cryptsvc"),
+                    new RepairStep("cmd.exe", "/c sc query bits | find \"RUNNING\" >nul || net start bits"),
+                    new RepairStep("cmd.exe", "/c sc query wuauserv | find \"RUNNING\" >nul || net start wuauserv"),
                 },
             },
             new RepairTask

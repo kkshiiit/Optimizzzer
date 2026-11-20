@@ -71,10 +71,33 @@ namespace Optimizzzer.App.Pages
                     Append(Loc.S("Código de salida: ", "Exit code: ") + code);
                     if (code != 0 && !step.TolerateExitCode) ok = false;
                 }
-                if (t.RestartsExplorer) await Task.Run(() => S.Win.RestartExplorer());
             }
             catch (OperationCanceledException) { Append(Loc.S("Cancelado.", "Cancelled.")); ok = false; }
             catch (Exception ex) { Append(ex.Message); ok = false; }
+            finally
+            {
+                // Restart what the steps stopped (services, File Explorer) even after Cancel or an error.
+                foreach (var step in t.CleanupSteps)
+                {
+                    Append("> " + step);
+                    try
+                    {
+                        var code = await Task.Run(() => S.Win.Process.RunStreaming(Environment.ExpandEnvironmentVariables(step.File), step.Args, Append, CancellationToken.None));
+                        Append(Loc.S("Código de salida: ", "Exit code: ") + code);
+                        if (code != 0 && !step.TolerateExitCode) ok = false;
+                    }
+                    catch (Exception ex) { Append(ex.Message); ok = false; }
+                }
+                if (t.RestartsExplorer)
+                {
+                    try
+                    {
+                        await Task.Run(() => S.Win.RestartExplorer());
+                        Append(Loc.S("Explorador reiniciado.", "File Explorer restarted."));
+                    }
+                    catch (Exception ex) { Append(ex.Message); ok = false; }
+                }
+            }
             _lastResult = ok ? "✓ " + Loc.S("Terminado", "Finished") : Loc.S("Terminado con errores, revisa la salida", "Finished with errors, check the output");
             _running = null;
             W.RefreshCurrentIf(this);

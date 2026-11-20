@@ -14,7 +14,9 @@ namespace Optimizzzer.Core
     /// </summary>
     public sealed class CliOptions
     {
-        public bool HasCommand => Scan || DryRun || Silent || Profile.HasValue || Apply.Count > 0 || Undo != null || List || SelfTest || Help;
+        public bool HasCommand => Scan || DryRun || Silent || Profile.HasValue || Level.HasValue || ApplyFile != null || Apply.Count > 0 || Undo != null || List || SelfTest || Help;
+        public Level? Level { get; private set; }
+        public string ApplyFile { get; private set; }
         public bool Scan { get; private set; }
         public bool DryRun { get; private set; }
         public bool Silent { get; private set; }
@@ -56,6 +58,15 @@ namespace Optimizzzer.Core
                         if (Enum.TryParse<ProfileKind>(p, true, out var kind) && kind != ProfileKind.None) o.Profile = kind;
                         else o.Errors.Add("Unknown profile: " + p + " (Minimal, Office, Gaming, Laptop, Privacy)");
                         break;
+                    case "level":
+                        var lv = Next();
+                        if (lv == null) break;
+                        o.Level = Levels.Parse(lv);
+                        if (o.Level == null) o.Errors.Add("Unknown level: " + lv + " (Quick, Balanced, Gaming, Max)");
+                        break;
+                    case "applyfile":
+                        o.ApplyFile = Next();
+                        break;
                     case "apply":
                         var ids = Next();
                         if (ids != null) o.Apply.AddRange(ids.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
@@ -72,8 +83,8 @@ namespace Optimizzzer.Core
                     default: o.Errors.Add("Unknown option: " + args[i]); break;
                 }
             }
-            if (o.Silent && !o.Profile.HasValue && o.Apply.Count == 0)
-                o.Errors.Add("-Silent needs -Profile or -Apply");
+            if (o.Silent && !o.Profile.HasValue && !o.Level.HasValue && o.ApplyFile == null && o.Apply.Count == 0)
+                o.Errors.Add("-Silent needs -Level, -Profile, -Apply or -ApplyFile");
             return o;
         }
 
@@ -82,10 +93,12 @@ namespace Optimizzzer.Core
 
   -Scan                   Show the status of every tweak on this PC
   -List                   List every tweak id with its category and risk
+  -Level <name>           Quick | Balanced | Gaming | Max (each includes the ones before)
   -Profile <name>         Minimal | Office | Gaming | Laptop | Privacy
+  -ApplyFile <file.optz>  Tweaks from a selection exported in the app
   -Apply <id,id,...>      Specific tweak ids (see -List)
   -DryRun                 Show exactly what would change, change nothing
-  -Silent                 Apply without asking (needs -Profile or -Apply)
+  -Silent                 Apply without asking (needs -Level, -Profile, -Apply or -ApplyFile)
   -NoRestorePoint         Skip the restore point (not recommended)
   -Undo <all|session|id>  Undo everything, one session, or one tweak
   -Report <file.html>     Write an HTML report of the run

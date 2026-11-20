@@ -19,6 +19,17 @@ namespace Optimizzzer.Core
         void DeleteKeyTree(Hive hive, string path);
         IList<string> GetValueNames(Hive hive, string path);
         IList<string> GetSubKeyNames(Hive hive, string path);
+        /// <summary>
+        /// False when the key (or, if it does not exist yet, its nearest existing parent) refuses writes even to an
+        /// administrator, as Windows does for some protected policy keys.
+        /// </summary>
+        bool CanWrite(Hive hive, string path);
+    }
+
+    /// <summary>Thrown when Windows refuses to change a protected setting, even to an administrator.</summary>
+    public sealed class ProtectedSettingException : Exception
+    {
+        public ProtectedSettingException(string what, Exception inner) : base("Windows protects " + what, inner) { }
     }
 
     public enum StartMode { Boot, System, Automatic, AutomaticDelayed, Manual, Disabled }
@@ -30,6 +41,9 @@ namespace Optimizzzer.Core
         void SetStartMode(string name, StartMode mode);
         /// <summary>Best effort, never throws for a service that is already stopped.</summary>
         void Stop(string name);
+        bool IsRunning(string name);
+        /// <summary>Best effort, never throws for a service that is already running.</summary>
+        void Start(string name);
     }
 
     public interface ITaskScheduler

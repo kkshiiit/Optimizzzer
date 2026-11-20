@@ -52,6 +52,9 @@ namespace Optimizzzer.Core
 
     public enum TweakStatus { NotApplied, Applied, Partial, NotApplicable, Unknown }
 
+    /// <summary>How noticeable the change usually is. A qualitative estimate, never a measured number.</summary>
+    public enum Impact { Low, Medium, High }
+
     public sealed class Tweak
     {
         public string Id { get; set; }
@@ -70,6 +73,7 @@ namespace Optimizzzer.Core
         public int MinBuild { get; set; }
         public int MaxBuild { get; set; } = int.MaxValue;
         public RestartKind Restart { get; set; }
+        public Impact Impact { get; set; } = Impact.Low;
         public ProfileKind Profiles { get; set; }
         /// <summary>Hardware conditions. Null means it applies to every PC.</summary>
         public Func<ISystemInfo, bool> HardwareFilter { get; set; }

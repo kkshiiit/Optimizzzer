@@ -45,7 +45,19 @@ namespace Optimizzzer.Windows
             }
         }
 
-        public void SetValue(Hive hive, string path, string name, RegValue value)
+        /// <summary>Turns "access denied" into ProtectedSettingException: as administrator, only Windows' own protection refuses.</summary>
+        private static void Guard(Hive hive, string path, Action a)
+        {
+            try { a(); }
+            catch (UnauthorizedAccessException ex) { throw new ProtectedSettingException(RegPathName(hive, path), ex); }
+            catch (System.Security.SecurityException ex) { throw new ProtectedSettingException(RegPathName(hive, path), ex); }
+        }
+
+        private static string RegPathName(Hive h, string p) => (h == Hive.LocalMachine ? "HKLM" : h == Hive.CurrentUser ? "HKCU" : h.ToString()) + "\\" + p;
+
+        public void SetValue(Hive hive, string path, string name, RegValue value) => Guard(hive, path, () => SetValueCore(hive, path, name, value));
+
+        private void SetValueCore(Hive hive, string path, string name, RegValue value)
         {
             using (var root = Root(hive))
             using (var k = root.CreateSubKey(path, true))
@@ -80,6 +92,42 @@ namespace Optimizzzer.Windows
         public void DeleteKeyTree(Hive hive, string path)
         {
             using (var root = Root(hive)) root.DeleteSubKeyTree(path, false);
+        }
+
+        private static readonly Lazy<bool> Elevated = new Lazy<bool>(() =>
+        {
+            using (var id = System.Security.Principal.WindowsIdentity.GetCurrent())
+                return new System.Security.Principal.WindowsPrincipal(id).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+        });
+
+        public bool CanWrite(Hive hive, string path)
+        {
+            // Without elevation every HKLM key refuses writes; that is not Windows protecting the setting.
+            if (!Elevated.Value) return true;
+            try
+            {
+                using (var root = Root(hive))
+                {
+                    var p = path;
+                    while (true)
+                    {
+                        using (var k = root.OpenSubKey(p, false))
+                        {
+                            if (k != null)
+                            {
+                                // Opening for write checks the ACL without changing anything.
+                                using (root.OpenSubKey(p, true)) { }
+                                return true;
+                            }
+                        }
+                        int i = p.LastIndexOf('\\');
+                        if (i < 0) return true;
+                        p = p.Substring(0, i);
+                    }
+                }
+            }
+            catch (UnauthorizedAccessException) { return false; }
+            catch (System.Security.SecurityException) { return false; }
         }
 
         public IList<string> GetValueNames(Hive hive, string path)

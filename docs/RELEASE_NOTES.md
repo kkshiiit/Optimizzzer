@@ -1,7 +1,17 @@
-**Novedades en 1.0.1** (correcciones de la revisión de código):
-- Si un ajuste falla a mitad, también se deshace la parte que llegó a cambiar. Por ejemplo, ya no queda un plan de energía duplicado.
-- Si deshacer un cambio falla, el cambio sigue en Historial para reintentarlo, en vez de darse por deshecho.
-- La desinstalación de OneDrive solo se da por buena si OneDrive desaparece de verdad.
+**Novedades en 1.1**
+- Inicio con 4 niveles en 1 clic: Rápido, Equilibrado, Juegos y Máximo rendimiento. Cada uno incluye los anteriores. Antes de aplicar ves qué ganas, qué pierdes, qué apps se quitan y si hay que reiniciar. Máximo pide doble confirmación.
+- Buscador Ctrl+K, Ayuda con glosario, recorrido de bienvenida y avisos claros de éxito y error.
+- Exportar e importar la selección en archivos `.optz`.
+- Tema claro u oscuro con 5 colores de acento, y modo ligero automático en equipos modestos.
+- Los ajustes que Windows protege se detectan, no se cambian y no se vuelven a ofrecer.
+- 30 correcciones de dos auditorías completas (deshacer, DNS, reparación, historial, detección de gráficas).
+
+**Novedades en 1.1.1**
+- Descripciones largas de Servicios y Tareas recortadas a 2 líneas, con "Ver más".
+- Personalizar: buscador y filtro en una sola fila, y el resto en "Más acciones".
+- Ajustes muestra el nombre del color de acento elegido.
+- Aviso al terminar de reiniciar el Explorador.
+- El tema oscuro es el predeterminado. El claro y el de Windows se eligen en Ajustes.
 
 ---
 

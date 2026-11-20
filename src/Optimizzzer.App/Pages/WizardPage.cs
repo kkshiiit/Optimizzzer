@@ -20,20 +20,24 @@ namespace Optimizzzer.App.Pages
         private enum Step { Scan, Profile, Select, Review, Apply, Done }
 
         private Step _step = Step.Scan;
-        private bool _scanning;
-        private string _scanError;
         private Action<double, string> _scanProgress;
         private ProfileKind? _profileChoice;
         private bool _manualChoice;
 
-        public WizardPage(AppState s, MainWindow w) : base(s, w) { }
+        public WizardPage(AppState s, MainWindow w) : base(s, w)
+        {
+            s.ScanProgress += (f, m) => _scanProgress?.Invoke(f, m);
+            s.ScanFinished += () => { if (_step == Step.Scan) W.RefreshCurrentIf(this); };
+        }
 
         public override string Key => "wizard";
-        public override string Title => Loc.S("Asistente de optimización", "Optimization wizard");
+        public override string Title => Loc.S("Personalizar", "Customize");
         public override string Icon => Icons.Wizard;
 
         private void GoTo(Step step)
         {
+            // Leaving the one-click flow through the normal steps forgets the level.
+            if (step != Step.Apply && step != Step.Done) _level = null;
             _step = step;
             Invalidate();
             W.ShowView(View);
@@ -41,6 +45,39 @@ namespace Optimizzzer.App.Pages
         }
 
         /// <summary>Self-test only: renders the profile, selection and review steps. Never applies anything.</summary>
+        private LevelInfo _level;
+
+        /// <summary>One-click level from Home: the user already read and confirmed the sheet, so go straight to Apply.</summary>
+        public void StartLevel(LevelInfo level, IList<Tweak> tweaks, bool restorePoint)
+        {
+            if (BusyApplying()) return;
+            _level = level;
+            S.Selected.Clear();
+            foreach (var t in tweaks) S.Selected.Add(t.Id);
+            S.CreateRestorePoint = restorePoint;
+            GoTo(Step.Apply);
+        }
+
+        /// <summary>Opens the tweak list, optionally filtered (used by Ctrl+K and by export/import).</summary>
+        public void OpenSelection(string query = null)
+        {
+            if (BusyApplying()) return;
+            W.Navigate(Key);
+            if (S.ScanResults == null) return;
+            _query = query ?? "";
+            _category = null;
+            GoTo(Step.Select);
+        }
+
+        /// <summary>While changes are being applied the selection must not change: show the running apply instead.</summary>
+        private bool BusyApplying()
+        {
+            if (!_applyRunning) return false;
+            W.Navigate(Key);
+            W.Toast(ToastKind.Info, Loc.S("Espera a que terminen los cambios en curso.", "Wait for the current changes to finish."));
+            return true;
+        }
+
         public void ShowStepsForTest(Action<string> afterEach)
         {
             foreach (var step in new[] { Step.Profile, Step.Select, Step.Review })
@@ -65,7 +102,7 @@ namespace Optimizzzer.App.Pages
 
         public override void OnShown()
         {
-            if (_step == Step.Scan && S.ScanResults == null && !_scanning && _scanError == null) _ = ScanAsync();
+            if (_step == Step.Scan && S.ScanResults == null && !S.Scanning && S.ScanError == null) _ = ScanAsync();
             if (_step == Step.Apply && !_applyRunning) _ = RunApplyAsync();
         }
 
@@ -134,45 +171,26 @@ namespace Optimizzzer.App.Pages
 
         // ---------- Step 1: scan ----------
 
-        private async Task ScanAsync()
+        private Task ScanAsync(bool rescan = false)
         {
-            _scanning = true;
-            _scanError = null;
+            var t = S.ScanAsync(rescan);
             if (_step == Step.Scan) { Invalidate(); W.ShowView(View); }
-            try
-            {
-                _scanProgress?.Invoke(0, Loc.S("Leyendo la información del equipo…", "Reading PC information…"));
-                await S.EnsureReadyAsync();
-                var tweaks = S.Catalog.ToList();
-                var progress = new Progress<int>(n => _scanProgress?.Invoke(n / (double)tweaks.Count,
-                    Loc.S("Comprobando ajuste ", "Checking tweak ") + n + Loc.S(" de ", " of ") + tweaks.Count + "…"));
-                S.ScanResults = await Task.Run(() => S.Engine.Scan(tweaks, progress));
-            }
-            catch (Exception ex)
-            {
-                _scanError = ex.Message;
-                S.ResetInit();
-            }
-            finally
-            {
-                _scanning = false;
-                if (_step == Step.Scan) { Invalidate(); W.ShowView(View); }
-            }
+            return t;
         }
 
         private FrameworkElement BuildScan()
         {
-            if (_scanning || (S.ScanResults == null && _scanError == null))
+            if (S.Scanning || (S.ScanResults == null && S.ScanError == null))
             {
                 var (view, update) = Ui.Loading(Loc.S("Leyendo la información del equipo…", "Reading PC information…"));
                 _scanProgress = update;
                 return StepFrame(Loc.S("Analizando tu equipo", "Scanning your PC"),
                     Loc.S("Solo se lee. No se cambia nada hasta el paso Aplicar.", "Read only. Nothing changes until the Apply step."), view, null);
             }
-            if (_scanError != null)
+            if (S.ScanError != null)
             {
                 return StepFrame(Loc.S("Analizando tu equipo", "Scanning your PC"), null,
-                    Ui.ErrorState(Loc.S("No se pudo analizar el equipo.", "The PC could not be scanned."), _scanError, () => _ = ScanAsync()), null);
+                    Ui.ErrorState(Loc.S("No se pudo analizar el equipo.", "The PC could not be scanned."), S.ScanError, () => _ = ScanAsync(true)), null);
             }
 
             var info = S.Ctx.Info;
@@ -206,7 +224,7 @@ namespace Optimizzzer.App.Pages
 
             var body = Ui.Stack(16, pc, status, safety);
             var footer = Footer(
-                Ui.Secondary(Loc.S("Volver a analizar", "Scan again"), () => { S.ScanResults = null; _ = ScanAsync(); }, Icons.Restart),
+                Ui.Secondary(Loc.S("Volver a analizar", "Scan again"), () => _ = ScanAsync(true), Icons.Restart),
                 Ui.Primary(Loc.S("Elegir un perfil", "Choose a profile"), () => GoTo(Step.Profile)));
             return StepFrame(Loc.S("Análisis terminado", "Scan complete"), Loc.S("Esto es lo que hemos encontrado.", "This is what we found."), body, footer);
         }
@@ -373,22 +391,33 @@ namespace Optimizzzer.App.Pages
             var hideNa = new CheckBox { Content = Loc.S("Ocultar los que no aplican", "Hide the ones that do not apply"), IsChecked = _hideNotApplicable, Margin = new Thickness(16, 0, 0, 0) };
             hideNa.Checked += (_, __) => { _hideNotApplicable = true; ApplyFilter(); };
             hideNa.Unchecked += (_, __) => { _hideNotApplicable = false; ApplyFilter(); };
-            var selectSafe = Ui.Subtle(Loc.S("Marcar los seguros visibles", "Tick visible safe ones"), () =>
+            void SelectSafe()
             {
                 foreach (var kv in rows.Where(r => r.Value.Visibility == Visibility.Visible && r.Key.Risk == Risk.Safe && r.Value.CanSelect))
                     kv.Value.SetChecked(true);
-            }, Icons.CheckCircle);
-            var clear = Ui.Subtle(Loc.S("Desmarcar visibles", "Untick visible"), () =>
+            }
+            void ClearVisible()
             {
                 foreach (var kv in rows.Where(r => r.Value.Visibility == Visibility.Visible)) kv.Value.SetChecked(false);
-            }, Icons.Close);
-            var toolbar = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+            }
+            // One row: search, the filter that changes the list, and the less frequent actions behind "More actions".
+            var more = Ui.MenuButton(Loc.S("Más acciones", "More actions"), Icons.More,
+                (Loc.S("Marcar los seguros visibles", "Tick visible safe ones"), Icons.CheckCircle, (Action)SelectSafe),
+                (Loc.S("Desmarcar visibles", "Untick visible"), Icons.Close, ClearVisible),
+                (Loc.S("Exportar la selección…", "Export the selection…"), Icons.Export, ExportSelection),
+                (Loc.S("Importar una selección…", "Import a selection…"), Icons.Import, ImportSelection));
+            var toolbar = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            // The search box takes whatever the filter and the menu leave free.
+            toolbar.ColumnDefinitions.Add(new ColumnDefinition { MinWidth = 180 });
+            toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             toolbar.Children.Add(search);
             hideNa.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(hideNa, 1);
             toolbar.Children.Add(hideNa);
-            selectSafe.Margin = new Thickness(8, 0, 0, 0);
-            toolbar.Children.Add(selectSafe);
-            toolbar.Children.Add(clear);
+            more.Margin = new Thickness(8, 0, 0, 0);
+            Grid.SetColumn(more, 2);
+            toolbar.Children.Add(more);
 
             var main = new Grid();
             main.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
@@ -431,6 +460,51 @@ namespace Optimizzzer.App.Pages
             return string.Join(Loc.S(" y ", " and "), parts);
         }
 
+        private void ExportSelection()
+        {
+            if (S.Selected.Count == 0) { W.Toast(ToastKind.Info, Loc.S("Marca al menos un ajuste para exportar.", "Tick at least one tweak to export.")); return; }
+            var dlg = new Microsoft.Win32.SaveFileDialog
+            {
+                FileName = "Optimizzzer-" + DateTime.Now.ToString("yyyy-MM-dd") + SelectionFile.Extension,
+                Filter = Loc.S("Selección de Optimizzzer", "Optimizzzer selection") + " (*" + SelectionFile.Extension + ")|*" + SelectionFile.Extension,
+            };
+            if (dlg.ShowDialog(W) != true) return;
+            try
+            {
+                System.IO.File.WriteAllText(dlg.FileName, SelectionFile.Write(S.Selected, DateTime.UtcNow), new System.Text.UTF8Encoding(false));
+                W.Toast(ToastKind.Success, S.Selected.Count + Loc.S(" ajustes exportados. Ábrelo en otro PC con Importar.", " tweaks exported. Open it on another PC with Import."));
+            }
+            catch (Exception ex) { W.ShowError(ex.Message, Loc.S("No se pudo guardar el archivo. Prueba en otra carpeta.", "The file could not be saved. Try another folder.")); }
+        }
+
+        private void ImportSelection()
+        {
+            var dlg = new Microsoft.Win32.OpenFileDialog
+            {
+                Filter = Loc.S("Selección de Optimizzzer", "Optimizzzer selection") + " (*" + SelectionFile.Extension + ")|*" + SelectionFile.Extension,
+            };
+            if (dlg.ShowDialog(W) != true) return;
+            try
+            {
+                var (known, unknown) = SelectionFile.Read(System.IO.File.ReadAllText(dlg.FileName), S.Catalog);
+                int added = 0, skipped = 0;
+                S.Selected.Clear();
+                foreach (var t in known)
+                {
+                    var st = S.StatusOf(t);
+                    if (st == TweakStatus.NotApplied || st == TweakStatus.Partial) { S.Selected.Add(t.Id); added++; } else skipped++;
+                }
+                _query = ""; _category = null;
+                GoTo(Step.Select);
+                W.Toast(added > 0 ? ToastKind.Success : ToastKind.Info,
+                    added + Loc.S(" ajustes marcados.", " tweaks ticked.")
+                    + (skipped > 0 ? " " + skipped + Loc.S(" ya estaban aplicados o no aplican a este equipo.", " were already applied or do not apply to this PC.") : "")
+                    + (unknown.Count > 0 ? " " + unknown.Count + Loc.S(" no existen en esta versión.", " do not exist in this version.") : ""));
+            }
+            catch (System.IO.InvalidDataException) { W.ShowError(dlg.FileName, Loc.S("Ese archivo no es una selección de Optimizzzer.", "That file is not an Optimizzzer selection.")); }
+            catch (Exception ex) { W.ShowError(ex.Message, Loc.S("No se pudo leer el archivo.", "The file could not be read.")); }
+        }
+
         private static bool Matches(Tweak t, string q)
         {
             bool In(string s) => s.IndexOf(q, StringComparison.CurrentCultureIgnoreCase) >= 0;
@@ -453,8 +527,9 @@ namespace Optimizzzer.App.Pages
                 Ui.Notice(Icons.Info, "AccentText", tweaks.Count + Loc.S(" cambios. Esta es la lista exacta de lo que se va a modificar; todavía no se ha tocado nada.", " changes. This is the exact list of what will be modified; nothing has been touched yet.")),
                 moderate + advanced > 0 ? Ui.Notice(Icons.Warning, "Moderate", Loc.S("Incluye ", "Includes ") + RiskCounts(moderate, advanced) + Loc.S(". Lee su inconveniente antes de seguir.", ". Read their downside before continuing.")) : null,
                 permanent > 0 ? Ui.Notice(Icons.Error, "Advanced", (permanent == 1
-                    ? Loc.S("1 cambio no se puede deshacer desde Optimizzzer (desinstalar una app). Se recupera reinstalándola desde la Microsoft Store.", "1 change cannot be undone from Optimizzzer (uninstalling an app). You get it back by reinstalling it from the Microsoft Store.")
-                    : permanent + Loc.S(" cambios no se pueden deshacer desde Optimizzzer (desinstalar apps). Se recuperan reinstalando desde la Microsoft Store.", " changes cannot be undone from Optimizzzer (uninstalling apps). You get them back by reinstalling from the Microsoft Store."))) : null,
+                    ? Loc.S("1 cambio es una desinstalación y no se puede deshacer desde Optimizzzer.", "1 change is an uninstall and cannot be undone from Optimizzzer.")
+                    : permanent + Loc.S(" cambios son desinstalaciones y no se pueden deshacer desde Optimizzzer.", " changes are uninstalls and cannot be undone from Optimizzzer."))
+                    + Loc.S(" Las apps se recuperan desde la Microsoft Store; OneDrive, desde la web de Microsoft.", " Apps come back from the Microsoft Store; OneDrive from Microsoft's website.")) : null,
                 restart != RestartKind.None ? Ui.Notice(Icons.Restart, "FgMuted", Names.Of(restart) + ".") : null);
 
             var rp = new CheckBox { Content = Loc.S("Crear un punto de restauración antes de aplicar (recomendado)", "Create a restore point before applying (recommended)"), IsChecked = S.CreateRestorePoint, Margin = new Thickness(0, 8, 0, 0) };
@@ -501,6 +576,12 @@ namespace Optimizzzer.App.Pages
 
         private CancellationTokenSource _cts;
         private (Action<double, string> Update, StackPanel Log) _applyUi;
+        // Kept outside the view: the page can be rebuilt mid-apply (language, theme, undo elsewhere) and must show the same progress.
+        private double _applyFraction;
+        private string _applyStatus;
+        private readonly List<(Tweak Tweak, JournalEntry Entry)> _applyLog = new List<(Tweak, JournalEntry)>();
+        /// <summary>Tweaks that were selected but not attempted because the user pressed Stop.</summary>
+        private int _notAttempted;
         private bool _applyRunning;
 
         private async Task RunApplyAsync()
@@ -508,13 +589,21 @@ namespace Optimizzzer.App.Pages
             if (_applyRunning) return;
             _applyRunning = true;
             var tweaks = SelectedTweaks();
-            var (update, log) = _applyUi;
+            _cts = new CancellationTokenSource();
+            _applyLog.Clear();
+            _applyFraction = 0;
+            _applyStatus = null;
             // Created on the UI thread, so its callbacks run on the UI thread.
             var progress = new Progress<ApplyProgress>(p =>
             {
-                update(p.Done / (double)Math.Max(1, p.Total),
-                    p.LastEntry == null ? Loc.S("Aplicando: ", "Applying: ") + Loc.S(p.Current.Title) + " (" + (p.Done + 1) + Loc.S(" de ", " of ") + p.Total + ")" : null);
-                if (p.LastEntry != null) log.Children.Add(LogLine(p.Current, p.LastEntry));
+                _applyFraction = p.Done / (double)Math.Max(1, p.Total);
+                if (p.LastEntry == null) _applyStatus = Loc.S("Aplicando: ", "Applying: ") + Loc.S(p.Current.Title) + " (" + (p.Done + 1) + Loc.S(" de ", " of ") + p.Total + ")";
+                _applyUi.Update?.Invoke(_applyFraction, p.LastEntry == null ? _applyStatus : null);
+                if (p.LastEntry != null)
+                {
+                    _applyLog.Add((p.Current, p.LastEntry));
+                    _applyUi.Log?.Children.Add(LogLine(p.Current, p.LastEntry));
+                }
             });
             var options = new ApplyOptions { CreateRestorePoint = S.CreateRestorePoint, RestorePointName = "Optimizzzer " + DateTime.Now.ToString("g") };
             var token = _cts.Token;
@@ -534,8 +623,14 @@ namespace Optimizzzer.App.Pages
                     S.After = S.Win.Measurer.Take("after");
                     S.Win.Measurements.Add(S.After);
                 });
+                // After Stop, keep the ones that never ran selected, so they are one click away.
+                var attempted = new HashSet<string>(S.LastSession.Entries.Select(e => e.TweakId));
+                _notAttempted = tweaks.Count(t => !attempted.Contains(t.Id));
                 S.Selected.Clear();
+                foreach (var t in tweaks.Where(t => !attempted.Contains(t.Id))) S.Selected.Add(t.Id);
+                W.InvalidateScanViews(except: this);
                 GoTo(Step.Done);
+                ToastResult(S.LastSession);
             }
             catch (Exception ex)
             {
@@ -552,11 +647,15 @@ namespace Optimizzzer.App.Pages
                 : Loc.S("Preparando…", "Preparing…"));
             var log = new StackPanel { Margin = new Thickness(0, 20, 0, 0) };
             AutomationProperties.SetLiveSetting(log, AutomationLiveSetting.Polite);
-            _cts = new CancellationTokenSource();
-            var stop = Ui.Secondary(Loc.S("Detener tras el cambio actual", "Stop after the current change"), () => _cts.Cancel(), Icons.Stop);
+            var stop = Ui.Secondary(Loc.S("Detener tras el cambio actual", "Stop after the current change"), () => _cts?.Cancel(), Icons.Stop);
+            if (_applyRunning)
+            {
+                if (_applyStatus != null) update(_applyFraction, _applyStatus);
+                foreach (var (t, e) in _applyLog) log.Children.Add(LogLine(t, e));
+            }
 
             _applyUi = (update, log);
-            return StepFrame(Loc.S("Aplicando cambios", "Applying changes"),
+            return StepFrame(_level != null ? Loc.S("Aplicando el nivel " + _level.Name.Es, "Applying the " + _level.Name.En + " level") : Loc.S("Aplicando cambios", "Applying changes"),
                 Loc.S("No apagues el equipo. Cada cambio que falle se revierte solo.", "Do not turn off the PC. Any change that fails is rolled back automatically."),
                 Ui.Stack(0, loading, log), Footer(stop, null));
         }
@@ -567,6 +666,7 @@ namespace Optimizzzer.App.Pages
             {
                 case EntryResult.Applied: return Ui.Notice(Icons.CheckCircle, "Success", Loc.S(t.Title));
                 case EntryResult.Skipped: return Ui.Notice(Icons.Info, "FgMuted", Loc.S(t.Title) + Loc.S(" (ya estaba aplicado)", " (already applied)"));
+                case EntryResult.Blocked: return Ui.Notice(Icons.Lock, "Moderate", Loc.S(t.Title) + Loc.S(": Windows protege este ajuste en este equipo. No se cambió nada; puedes hacerlo desde Configuración de Windows.", ": Windows protects this setting on this PC. Nothing was changed; you can do it from Windows Settings."));
                 default: return Ui.Notice(Icons.Error, "Advanced", Loc.S(t.Title) + ": " + e.Error + Loc.S(" (revertido)", " (rolled back)"));
             }
         }
@@ -579,13 +679,17 @@ namespace Optimizzzer.App.Pages
             if (s == null) return BuildScan();
             int ok = s.Entries.Count(e => e.ResultKind == EntryResult.Applied);
             int failed = s.Entries.Count(e => e.ResultKind == EntryResult.Failed);
+            int blocked = s.Entries.Count(e => e.ResultKind == EntryResult.Blocked);
             int skipped = s.Entries.Count(e => e.ResultKind == EntryResult.Skipped);
+            int notAttempted = _notAttempted;
             var applied = s.Entries.Where(e => e.ResultKind == EntryResult.Applied).Select(e => S.Catalog.FirstOrDefault(t => t.Id == e.TweakId)).Where(t => t != null).ToList();
             var restart = applied.Select(t => t.Restart).DefaultIfEmpty(RestartKind.None).Max();
 
             var summary = Ui.Stack(8,
                 Ui.Notice(Icons.CheckCircle, "Success", ok + Loc.S(" cambios aplicados.", " changes applied.")),
                 skipped > 0 ? Ui.Notice(Icons.Info, "FgMuted", skipped + Loc.S(" ya estaban aplicados.", " were already applied.")) : null,
+                blocked > 0 ? Ui.Notice(Icons.Lock, "Moderate", blocked + Loc.S(" no se aplicaron porque Windows protege ese ajuste en este equipo. No se volverán a ofrecer aquí; puedes cambiarlos desde Configuración de Windows.", " were not applied because Windows protects that setting on this PC. They will not be offered here again; you can change them from Windows Settings.")) : null,
+                notAttempted > 0 ? Ui.Notice(Icons.Stop, "Moderate", notAttempted + Loc.S(" no se aplicaron porque detuviste el proceso. Siguen seleccionados en el paso Selección.", " were not applied because you stopped. They are still selected in the Selection step.")) : null,
                 failed > 0 ? Ui.Notice(Icons.Error, "Advanced", failed + Loc.S(" fallaron y se revirtieron. Mira el detalle en Historial.", " failed and were rolled back. See details in History.")) : null,
                 s.RestorePointCreated
                     ? Ui.Notice(Icons.Shield, "Success", Loc.S("Punto de restauración creado.", "Restore point created."))
@@ -594,7 +698,7 @@ namespace Optimizzzer.App.Pages
             var actions = new WrapPanel { Margin = new Thickness(0, 16, 0, 0) };
             void Add(Button b) { b.Margin = new Thickness(0, 0, 8, 8); actions.Children.Add(b); }
             if (restart == RestartKind.Explorer || applied.Any(t => t.Restart == RestartKind.Explorer))
-                Add(Ui.Secondary(Loc.S("Reiniciar el Explorador ahora", "Restart File Explorer now"), () => Task.Run(() => S.Win.RestartExplorer()), Icons.Restart));
+                Add(Ui.Secondary(Loc.S("Reiniciar el Explorador ahora", "Restart File Explorer now"), RestartExplorerAsync, Icons.Restart));
             if (restart >= RestartKind.SignOut)
                 Add(Ui.Secondary(Loc.S("Reiniciar el equipo", "Restart the PC"), async () =>
                 {
@@ -629,13 +733,47 @@ namespace Optimizzzer.App.Pages
                 measures.Margin = new Thickness(0, 8, 0, 0);
             }
 
-            var footer = Footer(null, Ui.Primary(Loc.S("Empezar otra optimización", "Start another optimization"), () =>
+            var home = Ui.Secondary(Loc.S("Volver a Inicio", "Back to Home"), () => { _level = null; _step = Step.Scan; Invalidate(); W.Navigate("home"); }, Icons.Home);
+            var footer = Footer(home, Ui.Primary(Loc.S("Empezar otra optimización", "Start another optimization"), () =>
             {
                 _profileChoice = null; _manualChoice = false;
                 GoTo(Step.Scan);
             }));
-            return StepFrame(failed == 0 ? Loc.S("Listo", "Done") : Loc.S("Terminado con avisos", "Finished with warnings"), null,
-                Ui.Stack(0, summary, actions, measures), footer);
+
+            // One animated mark at the end: the clearest possible "it worked" (or "look here").
+            var mark = Ui.Icon(failed == 0 ? Icons.CheckCircle : Icons.Warning, 48, failed == 0 ? "Success" : "Moderate");
+            mark.HorizontalAlignment = HorizontalAlignment.Left;
+            mark.Margin = new Thickness(0, 0, 0, 12);
+            mark.Loaded += (_, __) => Theme.Pop(mark);
+            string heading = failed == 0
+                ? (_level != null ? Loc.S("Nivel " + _level.Name.Es + " aplicado", _level.Name.En + " level applied") : Loc.S("Listo", "Done"))
+                : Loc.S("Terminado con avisos", "Finished with warnings");
+            return StepFrame(heading, null, Ui.Stack(0, mark, summary, actions, measures), footer);
+        }
+
+        private async void RestartExplorerAsync()
+        {
+            try
+            {
+                await Task.Run(() => S.Win.RestartExplorer());
+                W.Toast(ToastKind.Success, Loc.S("Explorador reiniciado: la barra de tareas y el menú Inicio ya muestran los cambios.", "File Explorer restarted: the taskbar and Start now show the changes."));
+            }
+            catch (Exception ex)
+            {
+                W.ShowError(ex.Message, Loc.S("Cierra sesión y vuelve a entrar para ver los cambios.", "Sign out and back in to see the changes."));
+            }
+        }
+
+        /// <summary>Shown once when an apply ends, never when the result screen is redrawn later.</summary>
+        private void ToastResult(JournalSession s)
+        {
+            int ok = s.Entries.Count(e => e.ResultKind == EntryResult.Applied);
+            int failed = s.Entries.Count(e => e.ResultKind == EntryResult.Failed);
+            var restart = s.Entries.Where(e => e.ResultKind == EntryResult.Applied)
+                .Select(e => S.Catalog.FirstOrDefault(t => t.Id == e.TweakId)).Where(t => t != null)
+                .Select(t => t.Restart).DefaultIfEmpty(RestartKind.None).Max();
+            if (failed == 0) W.Toast(ToastKind.Success, ok + Loc.S(" cambios aplicados.", " changes applied.") + (restart >= RestartKind.SignOut ? " " + Loc.S("Reinicia para verlos todos.", "Restart to see them all.") : ""));
+            else W.Toast(ToastKind.Error, failed + Loc.S(" cambios fallaron y se revirtieron solos.", " changes failed and were rolled back."), Loc.S("Ver en Historial", "See in History"), () => W.Navigate("history"));
         }
 
         private void SaveReport()

@@ -177,8 +177,12 @@ namespace Optimizzzer.Core.Tools
                 switch (t.Kind)
                 {
                     case CleanupKind.RecycleBin:
-                        r.FreedBytes = special?.RecycleBinSize() ?? 0;
+                        var before = special?.RecycleBinSize() ?? 0;
                         special?.EmptyRecycleBin();
+                        // Measure again instead of trusting the call: a locked file or a policy can leave items behind.
+                        var after = special?.RecycleBinSize() ?? 0;
+                        r.FreedBytes = Math.Max(0, before - after);
+                        if (after > 0) r.Error = "Recycle Bin could not be emptied completely";
                         return r;
                     case CleanupKind.ComponentStore:
                         special?.CleanComponentStore(ct);

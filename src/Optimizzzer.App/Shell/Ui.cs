@@ -40,7 +40,18 @@ namespace Optimizzzer.App.Shell
         public const string Interface = "";   // Window
         public const string Update = "";      // Sync
         public const string Network = "";     // Globe
-        public const string Services = "";    // Gear
+        public const string Services = "\uE912";    // Manage: services are managed system components
+        public const string Settings = "\uE713";    // Gear: app settings
+        public const string Home = "\uE80F";
+        public const string Help = "\uE897";
+        public const string Export = "\uEDE1";
+        public const string More = "\uE712";
+        public const string Import = "\uE8B5";
+        public const string Glossary = "\uE82D";    // Dictionary
+        public const string Keyboard = "\uE765";
+        public const string Stopwatch = "\uE916";
+        public const string SpeedMedium = "\uEC49";
+        public const string Folder = "\uE8B7";
         public const string Apps = "";        // All apps
         public const string Cleanup = "";     // Delete
         public const string Repair = "";      // Wrench
@@ -88,6 +99,18 @@ namespace Optimizzzer.App.Shell
         }
 
         public static string For(Risk r) => r == Risk.Safe ? CheckCircle : r == Risk.Moderate ? Warning : Error;
+
+        /// <summary>Speed rises with the level; the controller marks the gaming level.</summary>
+        public static string For(Level l)
+        {
+            switch (l)
+            {
+                case Level.Quick: return Stopwatch;
+                case Level.Balanced: return SpeedMedium;
+                case Level.Gaming: return Gaming;
+                default: return Performance;
+            }
+        }
     }
 
     public static class Names
@@ -159,6 +182,37 @@ namespace Optimizzzer.App.Shell
             return t;
         }
 
+        /// <summary>
+        /// Secondary text cut to a few lines so long lists stay scannable. Long texts get a "Show more" toggle;
+        /// the full text is always in the tooltip and for screen readers.
+        /// </summary>
+        public static FrameworkElement Clamped(string text, double size = 12, int lines = 2, int longAfter = 140)
+        {
+            var t = Muted(text, size);
+            t.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+            t.LineHeight = Math.Round(size * 1.4);
+            AutomationProperties.SetName(t, text);
+            if (string.IsNullOrEmpty(text) || text.Length <= longAfter) return t;
+            double clamp = t.LineHeight * lines;
+            t.MaxHeight = clamp;
+            t.TextTrimming = TextTrimming.WordEllipsis;
+            t.ToolTip = text;
+            var more = Button(Loc.S("Ver más", "Show more"), "SubtleButton", null);
+            more.MinHeight = 28;
+            more.Padding = new Thickness(0);
+            more.FontSize = size;
+            more.HorizontalAlignment = HorizontalAlignment.Left;
+            more.SetResourceReference(Control.ForegroundProperty, "AccentText");
+            more.Click += (_, __) =>
+            {
+                bool open = double.IsInfinity(t.MaxHeight);
+                t.MaxHeight = open ? clamp : double.PositiveInfinity;
+                more.Content = open ? Loc.S("Ver más", "Show more") : Loc.S("Ver menos", "Show less");
+                AutomationProperties.SetName(more, (string)more.Content);
+            };
+            return Stack(0, t, more);
+        }
+
         public static TextBlock H1(string text) { var t = Text(text, 28, true); t.Margin = new Thickness(0, 0, 0, 4); return t; }
         public static TextBlock H2(string text) { var t = Text(text, 20, true); t.Margin = new Thickness(0, 0, 0, 4); return t; }
         public static TextBlock H3(string text) { var t = Text(text, 16, true); return t; }
@@ -223,6 +277,29 @@ namespace Optimizzzer.App.Shell
         public static Button Secondary(string text, Action onClick, string icon = null) => Button(text, "SecondaryButton", onClick, icon);
         public static Button Subtle(string text, Action onClick, string icon = null, string automationName = null) => Button(text, "SubtleButton", onClick, icon, automationName);
 
+        /// <summary>
+        /// An icon-only button that opens a small menu of related actions (keyboard: Enter or Space, then arrows).
+        /// The name is the tooltip and what screen readers announce.
+        /// </summary>
+        public static Button MenuButton(string text, string icon, params (string Text, string Icon, Action Run)[] items)
+        {
+            var b = Button("", "SubtleButton", null, icon, text);
+            b.MinWidth = 40;
+            b.ToolTip = text;
+            var menu = new ContextMenu { PlacementTarget = b, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+            foreach (var (label, glyph, run) in items)
+            {
+                var mi = new MenuItem { Header = label, Icon = Icon(glyph, 16) };
+                AutomationProperties.SetName(mi, label);
+                mi.Click += (_, __) => run();
+                menu.Items.Add(mi);
+            }
+            b.Click += (_, __) => { menu.IsOpen = true; };
+            AutomationProperties.SetName(b, text);
+            b.SetValue(AutomationProperties.HelpTextProperty, string.Join(", ", System.Linq.Enumerable.Select(items, i => i.Text)));
+            return b;
+        }
+
         public static Border Divider(double top = 0, double bottom = 0)
         {
             var d = new Border { Height = 1, Margin = new Thickness(0, top, 0, bottom) };
@@ -248,6 +325,17 @@ namespace Optimizzzer.App.Shell
             return row;
         }
 
+        /// <summary>A small labelled fact (impact, reversible, restart): icon plus words, quiet colour.</summary>
+        public static FrameworkElement Chip(string icon, string text, string brush = "FgMuted", string tooltip = null)
+        {
+            var row = Row(4, Icon(icon, 12, brush), Text(text, 12, false, brush, wrap: false));
+            var b = new Border { Child = row, Padding = new Thickness(8, 2, 8, 2), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 6, 0) };
+            b.SetResourceReference(Border.BackgroundProperty, "SurfaceAlt");
+            if (tooltip != null) b.ToolTip = tooltip;
+            AutomationProperties.SetName(b, text);
+            return b;
+        }
+
         public static FrameworkElement Notice(string icon, string brush, string text)
         {
             var g = new Grid();
@@ -270,7 +358,7 @@ namespace Optimizzzer.App.Shell
             var bar = new ProgressBar { Minimum = 0, Maximum = 1, Value = 0, Margin = new Thickness(0, 12, 0, 0), MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left, Width = 420 };
             AutomationProperties.SetName(bar, text);
             var view = Stack(0, label, bar);
-            return (view, (v, msg) => { bar.Value = v; if (msg != null) label.Text = msg; });
+            return (view, (v, msg) => { Theme.AnimateValue(bar, v); if (msg != null) label.Text = msg; });
         }
 
         public static FrameworkElement ErrorState(string what, string detail, Action retry)

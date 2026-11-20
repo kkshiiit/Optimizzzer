@@ -13,6 +13,11 @@ namespace Optimizzzer.Tests
             new Dictionary<string, Dictionary<string, RegValue>>(StringComparer.OrdinalIgnoreCase);
 
         public Func<Hive, string, string, bool> FailOnSet { get; set; }
+        /// <summary>Simulates Windows refusing a protected setting (WinRegistry turns access denied into this).</summary>
+        public Func<Hive, string, string, bool> ProtectOnSet { get; set; }
+        /// <summary>Keys (prefix) that behave like Windows' protected policy keys.</summary>
+        public HashSet<string> Protected { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public bool CanWrite(Hive hive, string path) => !Protected.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
 
         private static string K(Hive h, string p) => h + "\\" + p.TrimEnd('\\');
 
@@ -22,6 +27,7 @@ namespace Optimizzzer.Tests
         public void SetValue(Hive hive, string path, string name, RegValue value)
         {
             if (FailOnSet != null && FailOnSet(hive, path, name)) throw new UnauthorizedAccessException("denied: " + path);
+            if (ProtectOnSet != null && ProtectOnSet(hive, path, name)) throw new ProtectedSettingException(path, null);
             CreateKey(hive, path);
             _keys[K(hive, path)][name] = value;
         }
@@ -75,8 +81,11 @@ namespace Optimizzzer.Tests
         public bool Exists(string name) => Modes.ContainsKey(name);
         public StartMode? GetStartMode(string name) => Modes.TryGetValue(name, out var m) ? m : (StartMode?)null;
         public void SetStartMode(string name, StartMode mode) => Modes[name] = mode;
-        public void Stop(string name) { }
-        public string Dump() => string.Join(";", Modes.OrderBy(m => m.Key).Select(m => m.Key + "=" + m.Value));
+        public HashSet<string> Running { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public void Stop(string name) => Running.Remove(name);
+        public bool IsRunning(string name) => Running.Contains(name);
+        public void Start(string name) => Running.Add(name);
+        public string Dump() => string.Join(";", Modes.OrderBy(m => m.Key).Select(m => m.Key + "=" + m.Value + (Running.Contains(m.Key) ? "+run" : "")));
     }
 
     public sealed class FakeTasks : ITaskScheduler
@@ -95,9 +104,13 @@ namespace Optimizzzer.Tests
         public HashSet<string> Schemes { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "381b4222-f694-41f0-9685-ff5bb260df2e" };
         public FakeRegistry Registry { get; set; }
 
+        /// <summary>The next powercfg call whose arguments contain this text fails.</summary>
+        public string FailNext { get; set; }
+
         public ProcessResult Run(string file, string arguments, int timeoutMs = 120000)
         {
             Calls.Add(file + " " + arguments);
+            if (FailNext != null && arguments.Contains(FailNext)) { FailNext = null; return new ProcessResult(1, "", "denied"); }
             if (file != "powercfg") return new ProcessResult(0, "", "");
             var a = arguments.Split(' ');
             switch (a[0].ToLowerInvariant())
@@ -106,7 +119,10 @@ namespace Optimizzzer.Tests
                 case "/list": return new ProcessResult(0, string.Join("\n", Schemes), "");
                 case "-duplicatescheme": Schemes.Add(a[2]); return new ProcessResult(0, "", "");
                 case "/setactive": ActiveScheme = a[1]; return new ProcessResult(0, "", "");
-                case "/delete": Schemes.Remove(a[1]); return new ProcessResult(0, "", "");
+                case "/delete":
+                    // Like Windows: the active plan cannot be deleted.
+                    if (string.Equals(a[1], ActiveScheme, StringComparison.OrdinalIgnoreCase)) return new ProcessResult(1, "", "active");
+                    Schemes.Remove(a[1]); return new ProcessResult(0, "", "");
                 case "/hibernate":
                     Registry?.SetValue(Hive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled", RegValue.DWord(a[1] == "on" ? 1 : 0));
                     return new ProcessResult(0, "", "");

@@ -32,7 +32,7 @@ namespace Optimizzzer.Windows
             Try(() => m.RunningServices = ServiceController.GetServices().Count(s => { using (s) return s.Status == ServiceControllerStatus.Running; }));
             Try(() => { var c = _startup.CountEnabled(); if (c >= 0) m.StartupItems = c; });
             Try(() => m.SystemDriveFreeMb = new DriveInfo(Path.GetPathRoot(Environment.SystemDirectory)).AvailableFreeSpace / 1024 / 1024);
-            Try(() => m.LastBootUtc = DateTime.UtcNow.AddMilliseconds(-(Environment.TickCount & int.MaxValue)).ToString("o", CultureInfo.InvariantCulture));
+            Try(() => m.LastBootUtc = DateTime.UtcNow.AddMilliseconds(-(double)Native.GetTickCount64()).ToString("o", CultureInfo.InvariantCulture));
             Try(() => m.BootMs = LastBootDuration());
             return m;
         }

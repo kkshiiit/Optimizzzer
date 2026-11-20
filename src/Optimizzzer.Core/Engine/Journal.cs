@@ -20,7 +20,8 @@ namespace Optimizzzer.Core
         public DateTime Started => DateTime.Parse(StartedUtc, null, System.Globalization.DateTimeStyles.RoundtripKind);
     }
 
-    public enum EntryResult { Applied, Failed, Skipped }
+    /// <summary>Blocked: Windows itself refused the change (a protected setting). It was rolled back and is not offered again.</summary>
+    public enum EntryResult { Applied, Failed, Skipped, Blocked }
 
     [DataContract]
     public sealed class JournalEntry
@@ -58,20 +59,41 @@ namespace Optimizzzer.Core
 
         public FileJournalStore(string directory) { _dir = directory; }
 
+        // Save runs on the apply thread while pages load history on others: the .tmp recovery must never race a save.
+        private static readonly object Gate = new object();
+
         public void Save(JournalSession session)
+        {
+            lock (Gate) SaveCore(session);
+        }
+
+        private void SaveCore(JournalSession session)
         {
             Directory.CreateDirectory(_dir);
             var path = Path.Combine(_dir, "session-" + session.Id + ".json");
             var tmp = path + ".tmp";
-            using (var fs = File.Create(tmp)) Serializer.WriteObject(fs, session);
-            if (File.Exists(path)) File.Delete(path);
-            File.Move(tmp, path);
+            using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+                Serializer.WriteObject(fs, session);
+            // Replace swaps the files in one step, so a crash never leaves the session without a file on disk.
+            if (File.Exists(path)) File.Replace(tmp, path, null);
+            else File.Move(tmp, path);
         }
 
         public IList<JournalSession> LoadAll()
         {
+            lock (Gate) return LoadAllCore();
+        }
+
+        private IList<JournalSession> LoadAllCore()
+        {
             var list = new List<JournalSession>();
             if (!Directory.Exists(_dir)) return list;
+            // A leftover .tmp whose .json is missing means the process stopped between writing and moving: keep it.
+            foreach (var tmp in Directory.GetFiles(_dir, "session-*.json.tmp"))
+            {
+                var target = tmp.Substring(0, tmp.Length - 4);
+                try { if (!File.Exists(target)) File.Move(tmp, target); else File.Delete(tmp); } catch (Exception) { }
+            }
             foreach (var f in Directory.GetFiles(_dir, "session-*.json"))
             {
                 try

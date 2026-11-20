@@ -21,8 +21,9 @@ namespace Optimizzzer.Windows
         public int LogicalProcessors { get; private set; } = Environment.ProcessorCount;
         public long TotalMemoryMb { get; private set; }
         public IList<string> Gpus { get; private set; } = new List<string>();
-        public bool HasNvidia => Gpus.Any(g => g.IndexOf("NVIDIA", StringComparison.OrdinalIgnoreCase) >= 0);
-        public bool HasAmdGpu => Gpus.Any(g => g.IndexOf("Radeon", StringComparison.OrdinalIgnoreCase) >= 0 || g.IndexOf("AMD", StringComparison.OrdinalIgnoreCase) >= 0);
+        public bool HasNvidia => Gpus.Any(GpuNames.IsNvidia);
+        /// <summary>A dedicated AMD card; Ryzen integrated graphics do not count.</summary>
+        public bool HasAmdGpu => Gpus.Any(GpuNames.IsDedicatedAmd);
         public bool IsVirtualMachine { get; private set; }
 
         public static WinSystemInfo Read(IRegistry reg)

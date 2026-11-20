@@ -226,8 +226,12 @@ namespace Optimizzzer.Core.Catalog
                     },
                     RevertFn = (c, previous) =>
                     {
-                        if (!string.IsNullOrEmpty(previous)) c.Process.Run("powercfg", "/setactive " + previous);
-                        c.Process.Run("powercfg", "/delete " + UltimatePlanGuid);
+                        // Windows refuses to delete the active plan, so always leave ours first. The previous plan may be
+                        // unknown or deleted since; Balanced is then the safe fallback.
+                        var r = string.IsNullOrEmpty(previous) ? null : c.Process.Run("powercfg", "/setactive " + previous);
+                        if (r == null || !r.Ok) RunOrThrow(c, "powercfg", "/setactive 381b4222-f694-41f0-9685-ff5bb260df2e");
+                        var list = c.Process.Run("powercfg", "/list").Output;
+                        if (list.IndexOf(UltimatePlanGuid, StringComparison.OrdinalIgnoreCase) >= 0) RunOrThrow(c, "powercfg", "/delete " + UltimatePlanGuid);
                     },
                 });
 
@@ -249,7 +253,7 @@ namespace Optimizzzer.Core.Catalog
                     },
                     CaptureFn = c => "on",
                     ApplyFn = c => RunOrThrow(c, "powercfg", "/hibernate off"),
-                    RevertFn = (c, _) => c.Process.Run("powercfg", "/hibernate on"),
+                    RevertFn = (c, _) => RunOrThrow(c, "powercfg", "/hibernate on"),
                 });
 
             new TweakBuilder(l, "power.fastStartup", Category.Power, Risk.Safe)

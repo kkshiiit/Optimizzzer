@@ -58,6 +58,29 @@ namespace Optimizzzer.Windows
                 throw new InvalidOperationException("Could not change service " + name + ": " + (r.Output + " " + r.Error).Trim());
         }
 
+        public bool IsRunning(string name)
+        {
+            try { using (var sc = new ServiceController(name)) return sc.Status == ServiceControllerStatus.Running; }
+            catch (Exception) { return false; }
+        }
+
+        public void Start(string name)
+        {
+            try
+            {
+                using (var sc = new ServiceController(name))
+                {
+                    if (sc.Status == ServiceControllerStatus.Running) return;
+                    sc.Start();
+                    sc.WaitForStatus(ServiceControllerStatus.Running, TimeSpan.FromSeconds(15));
+                }
+            }
+            catch (Exception)
+            {
+                // Some services only start on demand (trigger start); the start mode is already restored.
+            }
+        }
+
         public void Stop(string name)
         {
             try

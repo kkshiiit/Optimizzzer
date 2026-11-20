@@ -75,7 +75,7 @@ namespace Optimizzzer.App.Pages
         {
             var info = Ui.Stack(2,
                 Ui.Row(10, Ui.Text(i.DisplayName, 14, true), Ui.Text(i.Running ? Loc.S("En ejecución", "Running") : Loc.S("Detenido", "Stopped"), 12, false, i.Running ? "Success" : "FgMuted", wrap: false)),
-                Ui.Muted(i.Name + (string.IsNullOrEmpty(i.Description) ? "" : " · " + i.Description), 12));
+                Ui.Clamped(i.Name + (string.IsNullOrEmpty(i.Description) ? "" : " · " + i.Description)));
             FrameworkElement right;
             if (i.Protected)
             {
@@ -98,8 +98,12 @@ namespace Optimizzzer.App.Pages
                             Loc.S("Si algo deja de funcionar, deshaz el cambio desde Historial o vuelve a ponerlo en Manual aquí.", "If something stops working, undo it from History or set it back to Manual here."),
                             Loc.S("Deshabilitar", "Disable"), danger: true))
                         { Refill(); return; }
-                        await ApplyManual(ManualTweaks.Service(i.Name, i.DisplayName, mode));
-                        i.StartMode = mode;
+                        // The row only changes when Windows accepted the new mode.
+                        if (await ApplyManual(ManualTweaks.Service(i.Name, i.DisplayName, mode)))
+                        {
+                            i.StartMode = mode;
+                            W.Toast(ToastKind.Success, i.DisplayName + ": " + ServiceStartAction.ModeName(mode, Loc.Lang));
+                        }
                         Refill();
                     };
                     seg.Children.Add(rb);
@@ -109,16 +113,17 @@ namespace Optimizzzer.App.Pages
             return CleanupPage.Row(Ui.Icon(Icons.Services, 16, "FgMuted"), info, right);
         }
 
-        private async Task ApplyManual(Tweak t)
+        private async Task<bool> ApplyManual(Tweak t)
         {
             try
             {
                 await S.EnsureReadyAsync();
                 var session = await Task.Run(() => S.Engine.Apply(new[] { t }, new ApplyOptions { CreateRestorePoint = false }));
                 var e = session.Entries.FirstOrDefault();
-                if (e != null && e.ResultKind == EntryResult.Failed) W.ShowError(e.Error);
+                if (e != null && e.ResultKind == EntryResult.Failed) { W.ShowError(e.Error); return false; }
+                return true;
             }
-            catch (Exception ex) { W.ShowError(ex.Message); }
+            catch (Exception ex) { W.ShowError(ex.Message); return false; }
         }
     }
 
@@ -164,7 +169,7 @@ namespace Optimizzzer.App.Pages
             };
             var last = i.LastRun.HasValue ? Loc.S("Última ejecución: ", "Last run: ") + i.LastRun.Value.ToString("g") : Loc.S("Nunca se ha ejecutado", "Never run");
             var info = Ui.Stack(2, Ui.Text(i.Name, 14, true), Ui.Muted(i.Folder + " · " + last, 12),
-                string.IsNullOrWhiteSpace(i.Description) ? null : Ui.Muted(i.Description, 12));
+                string.IsNullOrWhiteSpace(i.Description) ? null : Ui.Clamped(i.Description));
             return CleanupPage.Row(Ui.Icon(Icons.Tasks, 16, "FgMuted"), info, sw);
         }
     }

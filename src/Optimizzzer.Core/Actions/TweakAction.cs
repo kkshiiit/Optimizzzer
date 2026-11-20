@@ -16,6 +16,8 @@ namespace Optimizzzer.Core
         /// <summary>For registry writes: the first key in the path that did not exist yet, so undo can remove what we created.</summary>
         [DataMember(Order = 5, EmitDefaultValue = false)] public string CreatedKey { get; set; }
         [DataMember(Order = 6, EmitDefaultValue = false)] public RegTreeNode Tree { get; set; }
+        /// <summary>For services: whether it was running, so undo can start it again.</summary>
+        [DataMember(Order = 7, EmitDefaultValue = false)] public bool WasRunning { get; set; }
     }
 
     [DataContract]

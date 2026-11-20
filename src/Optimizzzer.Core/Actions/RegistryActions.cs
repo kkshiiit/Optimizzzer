@@ -32,6 +32,30 @@ namespace Optimizzzer.Core
             return path;
         }
 
+        /// <summary>
+        /// Removes <paramref name="path"/> and its parents up to and including <paramref name="createdKey"/>, but only
+        /// while each key is empty. Keys Optimizzzer created may since hold values from other tweaks or from the user.
+        /// </summary>
+        public static void RemoveEmptyKeys(IRegistry reg, Hive hive, string path, string createdKey)
+        {
+            if (string.IsNullOrEmpty(createdKey)) return;
+            var current = path;
+            while (current != null && current.Length >= createdKey.Length
+                   && current.StartsWith(createdKey, StringComparison.OrdinalIgnoreCase))
+            {
+                if (!reg.KeyExists(hive, current)) { current = Parent(current); continue; }
+                if (reg.GetValueNames(hive, current).Count > 0 || reg.GetSubKeyNames(hive, current).Count > 0) return;
+                reg.DeleteKeyTree(hive, current);
+                current = Parent(current);
+            }
+        }
+
+        private static string Parent(string p)
+        {
+            int i = p.LastIndexOf('\\');
+            return i < 0 ? null : p.Substring(0, i);
+        }
+
         public static RegTreeNode Export(IRegistry reg, Hive hive, string path, string name)
         {
             var node = new RegTreeNode { Name = name };
@@ -75,8 +99,10 @@ namespace Optimizzzer.Core
         public override ActionState Detect(SystemContext ctx)
         {
             var current = ctx.Registry.GetValue(Hive, Path, Name);
-            if (Value == null) return current == null ? ActionState.Applied : ActionState.NotApplied;
-            return Value.Equals(current) ? ActionState.Applied : ActionState.NotApplied;
+            bool applied = Value == null ? current == null : Value.Equals(current);
+            if (applied) return ActionState.Applied;
+            // Windows protects some policy keys even from administrators: never offer a change that cannot be made.
+            return ctx.Registry.CanWrite(Hive, Path) ? ActionState.NotApplied : ActionState.NotApplicable;
         }
 
         public override ActionSnapshot Snapshot(SystemContext ctx)
@@ -105,13 +131,11 @@ namespace Optimizzzer.Core
                 var kind = (RegKind)Enum.Parse(typeof(RegKind), s.ValueKind);
                 ctx.Registry.SetValue(Hive, Path, Name, RegValue.Deserialize(kind, s.Data));
             }
-            else if (!string.IsNullOrEmpty(s.CreatedKey))
-            {
-                ctx.Registry.DeleteKeyTree(Hive, s.CreatedKey);
-            }
             else
             {
+                // Remove only the value this action wrote; other tweaks may share the key.
                 ctx.Registry.DeleteValue(Hive, Path, Name);
+                RegPath.RemoveEmptyKeys(ctx.Registry, Hive, Path, s.CreatedKey);
             }
         }
 
@@ -185,7 +209,7 @@ namespace Optimizzzer.Core
 
         public override void Revert(SystemContext ctx, ActionSnapshot s)
         {
-            if (!s.Existed && !string.IsNullOrEmpty(s.CreatedKey)) ctx.Registry.DeleteKeyTree(Hive, s.CreatedKey);
+            if (!s.Existed) RegPath.RemoveEmptyKeys(ctx.Registry, Hive, Path, s.CreatedKey);
         }
 
         public override string Describe(Lang lang) =>
