@@ -31,6 +31,8 @@ namespace Optimizzzer.App.Pages
         protected virtual FrameworkElement Toolbar() => null;
         protected virtual string EmptyText => Loc.S("No hay elementos.", "There are no items.");
         protected virtual IEnumerable<T> Filtered(IEnumerable<T> items) => items;
+        /// <summary>Optional main action in the footer (for example "Uninstall 3 programs").</summary>
+        protected virtual Button PrimaryAction() => null;
 
         public override void OnShown()
         {
@@ -76,7 +78,7 @@ namespace Optimizzzer.App.Pages
             var scroll = new ScrollViewer { Content = _list, VerticalScrollBarVisibility = ScrollBarVisibility.Auto, CanContentScroll = false, Focusable = false };
             Grid.SetRow(scroll, 1);
             g.Children.Add(scroll);
-            return Frame(Intro, g, Footer(Ui.Secondary(Loc.S("Recargar", "Reload"), () => _ = ReloadAsync(), Icons.Restart), null), scroll: false);
+            return Frame(Intro, g, Footer(Ui.Secondary(Loc.S("Recargar", "Reload"), () => _ = ReloadAsync(), Icons.Restart), PrimaryAction()), scroll: false);
         }
 
         /// <summary>Rebuilds the visible rows. Long lists are capped and the rest reached by searching.</summary>

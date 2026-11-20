@@ -7,6 +7,7 @@ using System.Windows.Automation;
 using System.Windows.Controls;
 using Optimizzzer.App.Shell;
 using Optimizzzer.Core;
+using Optimizzzer.Core.Tools;
 using Optimizzzer.Windows;
 
 namespace Optimizzzer.App.Pages
@@ -174,31 +175,133 @@ namespace Optimizzzer.App.Pages
         }
     }
 
-    public sealed class AppsPage : ListPage<AppxInfo>
+    /// <summary>One row of "Programs and apps": a classic program or game, or a Microsoft Store app.</summary>
+    public sealed class AppEntry
     {
+        public InstalledProgram Program { get; set; }
+        public AppxInfo Store { get; set; }
+        public string Name => Program?.Name ?? Store?.Name;
+    }
+
+    /// <summary>
+    /// Every program, game and Store app on the PC. Programs and games can be uninstalled in batches, and what
+    /// their uninstallers leave behind is found and removed (to the Recycle Bin, with registry backups).
+    /// </summary>
+    public sealed class AppsPage : ListPage<AppEntry>
+    {
+        private enum Tab { Programs, Games, Store }
+        private Tab _tab = Tab.Programs;
         private bool _showSystem;
+        private readonly HashSet<string> _selected = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private Button _primary;
+
         public AppsPage(AppState s, MainWindow w) : base(s, w) { }
         public override string Key => "apps";
-        public override string Title => Loc.S("Apps instaladas", "Installed apps");
+        public override string Title => Loc.S("Programas y apps", "Programs and apps");
         public override string Icon => Icons.Apps;
-        protected override string Intro => Loc.S("Apps de la Microsoft Store y de Windows. Quitar una la desinstala para todos los usuarios; se recupera reinstalándola desde la Store.",
-            "Microsoft Store and Windows apps. Removing one uninstalls it for all users; you get it back by reinstalling from the Store.");
-        protected override string SearchHint => Loc.S("Buscar app", "Search app");
-        protected override IList<AppxInfo> Load() => S.Win.Appx.List().Where(a => !a.IsFramework).ToList();
-        protected override bool Matches(AppxInfo i, string q) => Has(i.Name, q) || Has(i.Publisher, q);
-        protected override IEnumerable<AppxInfo> Filtered(IEnumerable<AppxInfo> items) => _showSystem ? items : items.Where(i => !i.IsSystem && !i.NonRemovable);
+        protected override string Intro => Loc.S("Todo lo instalado: programas, juegos y apps de la Store. Marca varios y desinstálalos de una vez; después se buscan los restos que dejaron.",
+            "Everything installed: programs, games and Store apps. Tick several and uninstall them at once; then what they left behind is found.");
+        protected override string SearchHint => Loc.S("Buscar por nombre o editor", "Search by name or publisher");
+        protected override string EmptyText => _tab == Tab.Games
+            ? Loc.S("No se encontraron juegos de Steam, Epic, Riot, EA, Ubisoft, Battle.net, GOG o Xbox.", "No games from Steam, Epic, Riot, EA, Ubisoft, Battle.net, GOG or Xbox were found.")
+            : Loc.S("No hay elementos.", "There are no items.");
+
+        protected override IList<AppEntry> Load()
+        {
+            var list = S.Win.Programs.List().Select(p => new AppEntry { Program = p }).ToList();
+            try { list.AddRange(S.Win.Appx.List().Where(a => !a.IsFramework).Select(a => new AppEntry { Store = a })); }
+            catch (Exception) { } // Store apps need PowerShell; programs still show without them.
+            _selected.RemoveWhere(k => !list.Any(e => e.Program?.Key == k));
+            return list;
+        }
+
+        protected override bool Matches(AppEntry i, string q) =>
+            Has(i.Name, q) || Has(i.Program?.Publisher, q) || Has(i.Store?.Publisher, q) || Has(i.Program?.Platform, q);
+
+        protected override IEnumerable<AppEntry> Filtered(IEnumerable<AppEntry> items)
+        {
+            switch (_tab)
+            {
+                case Tab.Games: return items.Where(e => e.Program != null && e.Program.IsGame);
+                case Tab.Store: return items.Where(e => e.Store != null && (_showSystem || (!e.Store.IsSystem && !e.Store.NonRemovable)));
+                default: return items.Where(e => e.Program != null && !e.Program.IsGame && (_showSystem || !ProgramClassifier.IsSystemLike(e.Program)));
+            }
+        }
 
         protected override FrameworkElement Toolbar()
         {
-            var cb = new CheckBox { Content = Loc.S("Mostrar también las del sistema (bloqueadas)", "Also show system apps (locked)"), IsChecked = _showSystem };
+            int Count(Tab t) => Items == null ? 0 : Filtered2(t).Count();
+            var tabs = new StackPanel { Orientation = Orientation.Horizontal };
+            AutomationProperties.SetName(tabs, Loc.S("Tipo", "Type"));
+            foreach (var (t, label) in new[] { (Tab.Programs, Loc.S("Programas", "Programs")), (Tab.Games, Loc.S("Juegos", "Games")), (Tab.Store, Loc.S("Apps de la Store", "Store apps")) })
+            {
+                var rb = new RadioButton { GroupName = "appsTab", Content = label + " (" + Count(t) + ")", IsChecked = _tab == t, Margin = new Thickness(0, 0, 4, 0) };
+                rb.SetResourceReference(FrameworkElement.StyleProperty, "Segment");
+                var tab = t;
+                rb.Checked += (_, __) => { _tab = tab; W.RefreshCurrentIf(this); };
+                tabs.Children.Add(rb);
+            }
+            var cb = new CheckBox
+            {
+                Content = _tab == Tab.Store ? Loc.S("Mostrar también las del sistema (bloqueadas)", "Also show system apps (locked)") : Loc.S("Mostrar también componentes y actualizaciones", "Also show components and updates"),
+                IsChecked = _showSystem, Margin = new Thickness(16, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center,
+            };
             cb.Checked += (_, __) => { _showSystem = true; Refill(); };
             cb.Unchecked += (_, __) => { _showSystem = false; Refill(); };
-            return cb;
+            if (_tab == Tab.Games) return tabs;
+            return Ui.Row(0, tabs, cb);
         }
 
-        protected override FrameworkElement RowFor(AppxInfo i)
+        private IEnumerable<AppEntry> Filtered2(Tab t)
         {
-            var publisher = i.Publisher?.Split(',').FirstOrDefault(p => p.Trim().StartsWith("CN=", StringComparison.OrdinalIgnoreCase))?.Trim().Substring(3) ?? "";
+            var keep = _tab; _tab = t;
+            var r = Filtered(Items).ToList();
+            _tab = keep;
+            return r;
+        }
+
+        protected override Button PrimaryAction()
+        {
+            if (_tab == Tab.Store) return null;
+            _primary = Ui.Primary("", () => _ = UninstallSelectedAsync(), Icons.Cleanup);
+            UpdatePrimary();
+            return _primary;
+        }
+
+        private void UpdatePrimary()
+        {
+            if (_primary == null) return;
+            int n = _selected.Count;
+            var text = n == 0 ? Loc.S("Marca programas para desinstalar", "Tick programs to uninstall")
+                : n == 1 ? Loc.S("Desinstalar 1 programa", "Uninstall 1 program") : Loc.S("Desinstalar ", "Uninstall ") + n + Loc.S(" programas", " programs");
+            _primary.Content = text;
+            _primary.IsEnabled = n > 0;
+            AutomationProperties.SetName(_primary, text);
+        }
+
+        protected override FrameworkElement RowFor(AppEntry e) => e.Program != null ? ProgramRow(e.Program) : StoreRow(e.Store);
+
+        private FrameworkElement ProgramRow(InstalledProgram p)
+        {
+            var facts = new[]
+            {
+                p.Publisher, p.Version,
+                p.SizeBytes > 0 ? Loc.Size(p.SizeBytes) : null,
+                p.InstallDate.HasValue ? Loc.S("instalado el ", "installed ") + p.InstallDate.Value.ToString("d") : null,
+            }.Where(x => !string.IsNullOrWhiteSpace(x));
+            var title = Ui.Row(8, Ui.Text(p.Name, 14, true, "Fg", wrap: false), p.Platform != null ? Ui.Chip(Icons.Gaming, p.Platform) : null);
+            var info = Ui.Stack(2, title, Ui.Muted(string.Join(" · ", facts), 12));
+            var cb = new CheckBox { IsChecked = _selected.Contains(p.Key), VerticalAlignment = VerticalAlignment.Center, Content = info };
+            AutomationProperties.SetName(cb, p.Name);
+            cb.Checked += (_, __) => { _selected.Add(p.Key); UpdatePrimary(); };
+            cb.Unchecked += (_, __) => { _selected.Remove(p.Key); UpdatePrimary(); };
+            if (string.IsNullOrWhiteSpace(p.UninstallString) && string.IsNullOrWhiteSpace(p.QuietUninstallString)) cb.IsEnabled = false;
+            return CleanupPage.Row(Ui.Icon(p.IsGame ? Icons.Gaming : Icons.Apps, 16, "FgMuted"), cb, null);
+        }
+
+        private FrameworkElement StoreRow(AppxInfo i)
+        {
+            var publisher = i.Publisher?.Split(',').FirstOrDefault(x => x.Trim().StartsWith("CN=", StringComparison.OrdinalIgnoreCase))?.Trim().Substring(3) ?? "";
             var info = Ui.Stack(2, Ui.Text(i.Name, 14, true), Ui.Muted(publisher + " · " + i.Version, 12));
             FrameworkElement right;
             if (i.IsSystem || i.NonRemovable)
@@ -218,14 +321,167 @@ namespace Optimizzzer.App.Pages
                     try
                     {
                         await Task.Run(() => S.Win.Appx.Remove(i.Name));
-                        Items.Remove(i);
+                        Items.Remove(Items.First(x => x.Store == i));
                         Refill();
+                        W.Toast(ToastKind.Success, i.Name + Loc.S(" quitada.", " removed."));
                     }
                     catch (Exception ex) { b.IsEnabled = true; W.ShowError(ex.Message); }
                 };
                 right = b;
             }
             return CleanupPage.Row(Ui.Icon(Icons.Apps, 16, "FgMuted"), info, right);
+        }
+
+        // ---------- Batch uninstall ----------
+
+        private async Task UninstallSelectedAsync()
+        {
+            var chosen = Items.Where(e => e.Program != null && _selected.Contains(e.Program.Key)).Select(e => e.Program).ToList();
+            if (chosen.Count == 0) return;
+
+            // 1. Confirm, saying which ones ask questions and which ones go silently.
+            bool restorePoint = true;
+            var list = new StackPanel();
+            foreach (var p in chosen)
+            {
+                var (_, _, silent) = UninstallCommand.For(p, true);
+                var how = silent ? Loc.S("se quita sin preguntar", "removed without questions") : Loc.S("abrirá su propio desinstalador: respóndelo", "opens its own uninstaller: answer it");
+                var launcher = p.IsGame ? Loc.S(" · consejo: también puedes quitarlo desde ", " · tip: you can also remove it from ") + p.Platform : "";
+                list.Children.Add(Ui.Notice(p.IsGame ? Icons.Gaming : Icons.Apps, "Fg", p.Name + "  ·  " + how + launcher));
+            }
+            var rp = new CheckBox { Content = Loc.S("Crear un punto de restauración antes (recomendado)", "Create a restore point first (recommended)"), IsChecked = true };
+            rp.Checked += (_, __) => restorePoint = true;
+            rp.Unchecked += (_, __) => restorePoint = false;
+            var warn = Ui.Notice(Icons.Warning, "Moderate", Loc.S(
+                "Desinstalar no se puede deshacer desde aquí: para recuperarlo hay que volver a instalarlo. Los restos que borres después van a la Papelera y las claves del registro se guardan en un archivo .reg.",
+                "Uninstalling cannot be undone from here: to get it back you install it again. Leftovers you delete afterwards go to the Recycle Bin, and registry keys are saved to a .reg file."));
+            var tcs = new TaskCompletionSource<bool>();
+            var go = Ui.Primary(chosen.Count == 1 ? Loc.S("Desinstalar 1 programa", "Uninstall 1 program") : Loc.S("Desinstalar ", "Uninstall ") + chosen.Count + Loc.S(" programas", " programs"), () => { W.CloseOverlay(); tcs.TrySetResult(true); }, Icons.Cleanup);
+            go.SetResourceReference(Control.BackgroundProperty, "Advanced");
+            go.SetResourceReference(Control.BorderBrushProperty, "Advanced");
+            go.SetResourceReference(Control.ForegroundProperty, "Surface");
+            var cancel = Ui.Secondary(Loc.S("Cancelar", "Cancel"), () => { W.CloseOverlay(); tcs.TrySetResult(false); });
+            var buttons = Ui.Row(8, cancel, go);
+            buttons.HorizontalAlignment = HorizontalAlignment.Right;
+            W.ShowOverlay(MainWindow.Sheet(Ui.H2(Loc.S("Desinstalar programas", "Uninstall programs")), Ui.Stack(12, list, warn, rp), buttons), () => { W.CloseOverlay(); tcs.TrySetResult(false); }, 640);
+            if (!await tcs.Task) return;
+
+            // 2. Uninstall one by one, showing which one is running.
+            var status = Ui.Text("", 14);
+            var (loading, update) = Ui.Loading(Loc.S("Preparando…", "Preparing…"));
+            var stopRequested = new System.Threading.CancellationTokenSource();
+            var stop = Ui.Secondary(Loc.S("Detener tras el actual", "Stop after the current one"), () => stopRequested.Cancel(), Icons.Stop);
+            stop.HorizontalAlignment = HorizontalAlignment.Right;
+            W.ShowOverlay(MainWindow.Sheet(Ui.H2(Loc.S("Desinstalando", "Uninstalling")), Ui.Stack(12, loading, status,
+                Ui.Muted(Loc.S("Si se abre la ventana de un desinstalador, respóndela. Puede estar detrás de esta.", "If an uninstaller window opens, answer it. It may be behind this one."), 12)), stop), () => { }, 560);
+
+            if (restorePoint)
+            {
+                update(0, Loc.S("Creando el punto de restauración…", "Creating the restore point…"));
+                var err = await Task.Run(() => new WinRestorePoint(S.Win.Registry, S.Win.Process).Create("Optimizzzer: " + Loc.S("desinstalar programas", "uninstall programs")));
+                if (err != null) status.Text = Loc.S("No se pudo crear el punto de restauración: ", "The restore point could not be created: ") + err;
+            }
+
+            var removed = new List<InstalledProgram>();
+            var failed = new List<(InstalledProgram P, string Why)>();
+            for (int i = 0; i < chosen.Count; i++)
+            {
+                if (stopRequested.IsCancellationRequested) break;
+                var p = chosen[i];
+                update(i / (double)chosen.Count, Loc.S("Desinstalando ", "Uninstalling ") + p.Name + " (" + (i + 1) + Loc.S(" de ", " of ") + chosen.Count + ")");
+                try
+                {
+                    var r = await Task.Run(() => S.Win.Programs.Uninstall(p, true, System.Threading.CancellationToken.None));
+                    if (r.Removed) removed.Add(p);
+                    else failed.Add((p, r.Error ?? Loc.S("el desinstalador terminó pero el programa sigue instalado (¿lo cancelaste?)", "the uninstaller finished but the program is still installed (did you cancel it?)")));
+                }
+                catch (Exception ex) { failed.Add((p, ex.Message)); }
+            }
+
+            // 3. Look for what they left behind.
+            update(1, Loc.S("Buscando restos…", "Looking for leftovers…"));
+            var leftovers = new List<(InstalledProgram P, Leftover L)>();
+            foreach (var p in removed)
+            {
+                try { foreach (var l in await Task.Run(() => S.Win.Programs.FindLeftovers(p))) leftovers.Add((p, l)); }
+                catch (Exception) { }
+            }
+            W.CloseOverlay();
+            foreach (var p in removed) _selected.Remove(p.Key);
+
+            long freed = 0;
+            if (leftovers.Count > 0) freed = await CleanLeftoversAsync(leftovers);
+
+            if (removed.Count > 0)
+                W.Toast(ToastKind.Success, (removed.Count == 1 ? Loc.S("1 programa desinstalado", "1 program uninstalled") : removed.Count + Loc.S(" programas desinstalados", " programs uninstalled"))
+                    + (freed > 0 ? Loc.S(". Restos borrados: ", ". Leftovers removed: ") + Loc.Size(freed) : "") + ".");
+            if (failed.Count > 0)
+                W.ShowError(string.Join("\n", failed.Select(f => f.P.Name + ": " + f.Why)),
+                    Loc.S("Estos programas siguen instalados. Prueba de nuevo, o desinstálalos desde Configuración > Aplicaciones o desde su lanzador.",
+                        "These programs are still installed. Try again, or uninstall them from Settings > Apps or from their launcher."));
+            _ = ReloadAsync();
+        }
+
+        /// <summary>Shows what was found, High confidence ticked and Medium unticked with the reason, then deletes the ticked ones.</summary>
+        private async Task<long> CleanLeftoversAsync(List<(InstalledProgram P, Leftover L)> items)
+        {
+            var ticked = new HashSet<Leftover>(items.Where(x => x.L.Confidence == Confidence.High).Select(x => x.L));
+            var body = new StackPanel();
+            Button go = null;
+            void Update()
+            {
+                long size = ticked.Sum(l => l.SizeBytes);
+                go.Content = Loc.S("Borrar ", "Delete ") + ticked.Count + Loc.S(" restos", " leftovers") + (size > 0 ? " (" + Loc.Size(size) + ")" : "") + Loc.S(" a la Papelera", " to the Recycle Bin");
+                go.IsEnabled = ticked.Count > 0;
+            }
+            foreach (var group in items.GroupBy(x => x.P))
+            {
+                var head = Ui.Text(group.Key.Name, 14, true);
+                head.Margin = new Thickness(0, 8, 0, 4);
+                body.Children.Add(head);
+                foreach (var (_, l) in group)
+                {
+                    string kind;
+                    switch (l.Kind)
+                    {
+                        case LeftoverKind.Folder: kind = Loc.S("Carpeta", "Folder"); break;
+                        case LeftoverKind.RegistryKey: kind = Loc.S("Registro", "Registry"); break;
+                        case LeftoverKind.Shortcut: kind = Loc.S("Acceso directo", "Shortcut"); break;
+                        case LeftoverKind.ScheduledTask: kind = Loc.S("Tarea", "Task"); break;
+                        default: kind = Loc.S("Servicio", "Service"); break;
+                    }
+                    var conf = l.Confidence == Confidence.High
+                        ? Ui.Chip(Icons.CheckCircle, Loc.S("Seguro que es suyo", "Certainly its own"), "Success")
+                        : Ui.Chip(Icons.Warning, Loc.S("Coincide por nombre: revisa antes", "Matched by name: check first"), "Moderate");
+                    var info = Ui.Stack(2,
+                        Ui.Row(8, Ui.Text(kind + (l.SizeBytes > 0 ? " · " + Loc.Size(l.SizeBytes) : ""), 13, true, "Fg", wrap: false), conf),
+                        Ui.Muted(l.Path, 12),
+                        Ui.Muted(Loc.S(l.Reason), 12));
+                    var cb = new CheckBox { IsChecked = ticked.Contains(l), Content = info };
+                    AutomationProperties.SetName(cb, kind + " " + l.Path);
+                    var item = l;
+                    cb.Checked += (_, __) => { ticked.Add(item); Update(); };
+                    cb.Unchecked += (_, __) => { ticked.Remove(item); Update(); };
+                    cb.Margin = new Thickness(0, 4, 0, 4);
+                    body.Children.Add(cb);
+                }
+            }
+            var tcs = new TaskCompletionSource<bool>();
+            go = Ui.Primary("", () => { W.CloseOverlay(); tcs.TrySetResult(true); }, Icons.Cleanup);
+            var skip = Ui.Secondary(Loc.S("Dejarlos", "Keep them"), () => { W.CloseOverlay(); tcs.TrySetResult(false); });
+            Update();
+            var buttons = Ui.Row(8, skip, go);
+            buttons.HorizontalAlignment = HorizontalAlignment.Right;
+            var intro = Ui.Muted(Loc.S("Esto quedó después de desinstalar. Las carpetas van a la Papelera; las claves del registro se guardan antes en ", "This was left after uninstalling. Folders go to the Recycle Bin; registry keys are saved first to ") + S.Win.Programs.BackupFolder + ".", 12);
+            W.ShowOverlay(MainWindow.Sheet(Ui.Stack(4, Ui.H2(Loc.S("Restos encontrados", "Leftovers found")), intro), body, buttons), () => { W.CloseOverlay(); tcs.TrySetResult(false); }, 720);
+            if (!await tcs.Task) return 0;
+
+            var results = await Task.Run(() => S.Win.Programs.Delete(ticked.ToList()));
+            var bad = results.Where(r => !r.Ok).ToList();
+            if (bad.Count > 0)
+                W.ShowError(string.Join("\n", bad.Select(r => r.Item.Path + ": " + r.Error)),
+                    Loc.S("Algunos restos no se pudieron borrar, normalmente porque un archivo está en uso. Reinicia y vuelve a intentarlo.", "Some leftovers could not be deleted, usually because a file is in use. Restart and try again."));
+            return results.Where(r => r.Ok).Sum(r => r.Item.SizeBytes);
         }
     }
 }
