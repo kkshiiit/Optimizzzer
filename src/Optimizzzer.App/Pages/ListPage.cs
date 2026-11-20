@@ -64,10 +64,12 @@ namespace Optimizzzer.App.Pages
 
             var search = Ui.SearchBox(SearchHint, q => { Query = q; Refill(); });
             search.Box.Text = Query;
-            var bar = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+            // Gaps on the right and bottom of each item, so a wrapped second line starts flush left.
+            var bar = new WrapPanel { Margin = new Thickness(0, 0, 0, 4) };
+            search.Margin = new Thickness(0, 0, 16, 8);
             bar.Children.Add(search);
             var extra = Toolbar();
-            if (extra != null) { extra.Margin = new Thickness(16, 0, 0, 0); extra.VerticalAlignment = VerticalAlignment.Center; bar.Children.Add(extra); }
+            if (extra != null) { extra.Margin = new Thickness(0, 0, 0, 8); extra.VerticalAlignment = VerticalAlignment.Center; bar.Children.Add(extra); }
 
             _list = new StackPanel();
             _empty = Ui.Empty(EmptyText);

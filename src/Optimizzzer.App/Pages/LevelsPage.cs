@@ -187,7 +187,15 @@ namespace Optimizzzer.App.Pages
             int moderate = tweaks.Count(t => t.Risk != Risk.Safe);
 
             var body = new StackPanel();
-            var head = Ui.Row(12, Ui.Icon(Icons.For(level), 28, "AccentText"), Ui.Stack(0, Ui.H2(Loc.S("Nivel " + l.Name.Es, l.Name.En + " level")), Ui.Muted(Loc.S(l.What))));
+            // A grid, not a row: the description wraps instead of running off the right edge.
+            var head = new Grid();
+            head.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            head.ColumnDefinitions.Add(new ColumnDefinition());
+            var headIcon = Ui.Icon(Icons.For(level), 28, "AccentText");
+            headIcon.Margin = new Thickness(0, 0, 12, 0); headIcon.VerticalAlignment = VerticalAlignment.Top;
+            var headText = Ui.Stack(0, Ui.H2(Loc.S("Nivel " + l.Name.Es, l.Name.En + " level")), Ui.Muted(Loc.S(l.What)));
+            Grid.SetColumn(headText, 1);
+            head.Children.Add(headIcon); head.Children.Add(headText);
             body.Children.Add(head);
 
             var what = Ui.Stack(10,

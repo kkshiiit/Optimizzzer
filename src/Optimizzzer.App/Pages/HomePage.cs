@@ -107,7 +107,7 @@ namespace Optimizzzer.App.Pages
             string Gb(long? b) => b.HasValue && b > 0 ? Loc.N(b.Value / 1073741824.0, b.Value >= 10L * 1073741824 ? "N0" : "N1") + " GB" : null;
 
             Tile(Icons.Processor, Loc.S("Procesador", "Processor"), Short(hw?.Cpu ?? info.CpuName),
-                hw?.Cores > 0 ? hw.Cores + Loc.S(" núcleos · ", " cores · ") + hw.Threads + Loc.S(" hilos", " threads") + (hw.CpuMaxMhz > 0 ? " · " + Loc.N(hw.CpuMaxMhz.Value / 1000.0, "N1") + " GHz" : "") : null);
+                hw?.Cores > 0 ? hw.Cores + (hw.Cores == 1 ? Loc.S(" núcleo · ", " core · ") : Loc.S(" núcleos · ", " cores · ")) + hw.Threads + (hw.Threads == 1 ? Loc.S(" hilo", " thread") : Loc.S(" hilos", " threads")) + (hw.CpuMaxMhz > 0 ? " · " + Loc.N(hw.CpuMaxMhz.Value / 1000.0, "N1") + " GHz" : "") : null);
             if (hw != null && hw.Gpus.Count > 0)
                 foreach (var g in hw.Gpus)
                     Tile(Icons.Gaming, Loc.S("Gráfica", "Graphics"), g.Name, g.MemoryBytes > 0 ? Gb(g.MemoryBytes) + Loc.S(" de memoria propia", " of its own memory") : null);
