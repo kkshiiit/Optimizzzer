@@ -143,3 +143,60 @@ namespace Optimizzzer.Tests
         }
     }
 }
+
+namespace Optimizzzer.Tests
+{
+    public class CleanupV12Tests
+    {
+        [Fact]
+        public void Star_segments_expand_to_every_profile_and_nothing_else()
+        {
+            var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "optz-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                foreach (var p in new[] { "Default", "Profile 1" })
+                    System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "User Data", p, "Cache", "Cache_Data"));
+                System.IO.Directory.CreateDirectory(System.IO.Path.Combine(root, "User Data", "Profile 2"));
+                var found = CleanupEngine.ExpandFolders(root + "/User Data/*/Cache/Cache_Data").ToList();
+                Assert.Equal(2, found.Count);
+                Assert.All(found, f => Assert.EndsWith("Cache_Data", f));
+            }
+            finally { if (System.IO.Directory.Exists(root)) System.IO.Directory.Delete(root, true); }
+        }
+
+        [Fact]
+        public void Every_cleanup_and_repair_item_has_its_longer_explanation()
+        {
+            Assert.All(CleanupCatalog.All, t => Assert.NotNull(t.Details));
+            Assert.All(RepairCatalog.All, t => { Assert.NotNull(t.WhenToUse); Assert.NotNull(t.WhatItDoes); });
+            Assert.All(CleanupCatalog.All, t => Assert.DoesNotContain("—", t.Details.Es + t.Details.En));
+        }
+    }
+}
+
+namespace Optimizzzer.Tests
+{
+    public class FolderSizesTests
+    {
+        [Fact]
+        public void Largest_points_at_the_specific_folder()
+        {
+            var root = System.IO.Path.Combine(System.IO.Path.GetTempPath(), "optz-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var game = System.IO.Path.Combine(root, "Games", "BigGame");
+                System.IO.Directory.CreateDirectory(game);
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(game, "data.bin"), new byte[100_000]);
+                var docs = System.IO.Path.Combine(root, "Docs");
+                System.IO.Directory.CreateDirectory(docs);
+                System.IO.File.WriteAllBytes(System.IO.Path.Combine(docs, "a.txt"), new byte[10_000]);
+                var top = FolderSizes.Largest(root, 2, 5);
+                Assert.Equal(game, top[0].Path);
+                Assert.Equal(100_000, top[0].Bytes);
+                Assert.DoesNotContain(top, t => t.Path == System.IO.Path.Combine(root, "Games"));
+                Assert.Contains(top, t => t.Path == docs && t.Bytes == 10_000);
+            }
+            finally { if (System.IO.Directory.Exists(root)) System.IO.Directory.Delete(root, true); }
+        }
+    }
+}

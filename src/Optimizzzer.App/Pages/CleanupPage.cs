@@ -18,6 +18,12 @@ namespace Optimizzzer.App.Pages
         private readonly HashSet<string> _selected = new HashSet<string>(CleanupCatalog.All.Where(c => c.SelectedByDefault).Select(c => c.Id));
         private bool _measuring, _cleaning;
         private List<CleanupResult> _results;
+        // "What takes the most space": read only, started on demand because it walks the whole drive.
+        private IList<(string Path, long Bytes)> _largest;
+        private bool _sizing;
+        private string _sizingNow;
+        private Action<double, string> _sizingUpdate;
+        private System.Threading.CancellationTokenSource _sizingCts;
 
         public CleanupPage(AppState s, MainWindow w) : base(s, w) { }
         public override string Key => "cleanup";
@@ -87,7 +93,7 @@ namespace Optimizzzer.App.Pages
                 _estimates.TryGetValue(t.Id, out var est);
                 string size = est == null ? "" : est.Measurable ? Loc.Size(est.Bytes) : Loc.S("Se sabe al terminar", "Known when finished");
                 var title = Ui.Row(12, Ui.Text(Loc.S(t.Title), 14, true), t.Risk != Risk.Safe ? Ui.RiskMarker(t.Risk) : null);
-                var content = Ui.Stack(2, title, Ui.Muted(Loc.S(t.Description)));
+                var content = Ui.Stack(2, title, Ui.Muted(Loc.S(t.Description)), t.Details != null ? Ui.MoreInfo((null, Loc.S(t.Details))) : null);
                 var cb = new CheckBox { IsChecked = _selected.Contains(t.Id), VerticalAlignment = VerticalAlignment.Top, Margin = new Thickness(0, -6, 0, 0) };
                 AutomationProperties.SetName(cb, Loc.S(t.Title) + ", " + size);
                 cb.Checked += (_, __) => { _selected.Add(t.Id); Update(); };
@@ -120,7 +126,54 @@ namespace Optimizzzer.App.Pages
             Update();
             var footer = Footer(Ui.Secondary(Loc.S("Volver a calcular", "Recalculate"), () => _ = MeasureAsync(), Icons.Restart), go);
             return Frame(Loc.S("Solo se borran archivos temporales y cachés que Windows y los programas vuelven a crear. Tus documentos no se tocan.",
-                "Only temporary files and caches that Windows and programs recreate are deleted. Your documents are not touched."), list, footer);
+                "Only temporary files and caches that Windows and programs recreate are deleted. Your documents are not touched."), Ui.Stack(0, list, LargestSection()), footer);
+        }
+
+        private FrameworkElement LargestSection()
+        {
+            var head = Ui.H2(Loc.S("Qué ocupa más", "What takes the most space"));
+            var intro = Ui.Muted(Loc.S("Las 20 carpetas más grandes del disco del sistema. Solo se mira: no se borra nada. Útil para encontrar juegos, descargas o copias que ya no usas. Revisarlo todo puede tardar varios minutos.",
+                "The 20 largest folders on the system drive. Look only: nothing is deleted. Useful to find games, downloads or copies you no longer use. Going through everything can take a few minutes."), 12);
+            var box = Ui.Stack(8, head, intro);
+            box.Margin = new Thickness(0, 28, 0, 0);
+            if (_sizing)
+            {
+                var (v, upd) = Ui.Loading(Loc.S("Revisando ", "Checking ") + (_sizingNow ?? "…"));
+                _sizingUpdate = upd;
+                box.Children.Add(v);
+                box.Children.Add(Ui.Secondary(Loc.S("Detener", "Stop"), () => _sizingCts?.Cancel(), Icons.Stop));
+                return box;
+            }
+            if (_largest != null)
+            {
+                foreach (var (path, bytes) in _largest)
+                {
+                    var open = Ui.Subtle(Loc.S("Abrir", "Open"), () =>
+                    {
+                        try { System.Diagnostics.Process.Start("explorer.exe", "\"" + path + "\""); } catch (Exception ex) { W.ShowError(ex.Message); }
+                    }, Icons.Folder, Loc.S("Abrir ", "Open ") + path);
+                    var size = Ui.Text(Loc.Size(bytes), 14, true, "Fg", wrap: false);
+                    size.VerticalAlignment = VerticalAlignment.Center;
+                    var right = Ui.Row(8, size, open);
+                    box.Children.Add(Row(Ui.Icon(Icons.Folder, 16, "FgMuted"), Ui.Text(path, 14), right));
+                }
+            }
+            var go = Ui.Secondary(_largest == null ? Loc.S("Ver qué ocupa más", "See what takes the most space") : Loc.S("Volver a revisar", "Check again"), async () =>
+            {
+                _sizing = true; _sizingCts = new System.Threading.CancellationTokenSource();
+                W.RefreshCurrentIf(this);
+                // Only the status line changes while walking the drive; the page is not rebuilt (it would jump to the top).
+                var progress = new Progress<string>(p => { _sizingNow = p; _sizingUpdate?.Invoke(0, Loc.S("Revisando ", "Checking ") + p); });
+                var drive = System.IO.Path.GetPathRoot(Environment.SystemDirectory);
+                try { _largest = await Task.Run(() => FolderSizes.Largest(drive, 3, 20, _sizingCts.Token, progress)); }
+                catch (OperationCanceledException) { }
+                catch (Exception ex) { W.ShowError(ex.Message); }
+                _sizing = false; _sizingNow = null;
+                W.RefreshCurrentIf(this);
+            }, Icons.Search);
+            go.HorizontalAlignment = HorizontalAlignment.Left;
+            box.Children.Add(go);
+            return box;
         }
 
         internal static Border Row(UIElement left, UIElement middle, UIElement right)
