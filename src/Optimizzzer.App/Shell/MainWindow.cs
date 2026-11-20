@@ -185,11 +185,15 @@ namespace Optimizzzer.App.Shell
             UpdateLayoutMode(force: true);
         }
 
+        private bool? _appliedCompact;
+
         private void UpdateLayoutMode(bool force = false)
         {
             if (ActualWidth <= 0) return;
             bool compact = ActualWidth < CompactWidth || _state.NavCollapsed;
-            if (compact == Compact && !force) return;
+            // Compared with what this window last applied, not with the shared flag, so a new window always sizes its menu.
+            if (compact == _appliedCompact && !force) return;
+            _appliedCompact = compact;
             Compact = compact;
             _navColumn.Width = new GridLength(compact ? 72 : 244);
             BuildNavItems();
