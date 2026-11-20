@@ -65,7 +65,7 @@ namespace Optimizzzer.App.Pages
             {
                 var (view, update) = Ui.Loading(Loc.S("Leyendo la información del equipo…", "Reading PC information…"));
                 _progress = update;
-                return Frame(Loc.S("Solo se lee: no se cambia nada sin tu confirmación.", "Read only: nothing changes without your confirmation."), view);
+                return Frame(Loc.S("Solo se lee: no se cambia nada sin tu confirmación.", "Read only: nothing changes without your confirmation."), Ui.Stack(16, view, Ui.ScanDurationNote()));
             }
 
             var info = S.Ctx.Info;

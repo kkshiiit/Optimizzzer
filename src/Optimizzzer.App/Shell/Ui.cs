@@ -369,6 +369,11 @@ namespace Optimizzzer.App.Shell
                 retry == null ? null : Secondary(Loc.S("Intentar de nuevo", "Try again"), retry, Icons.Restart));
         }
 
+        /// <summary>The scan reads every tweak's real state, so on slow PCs it takes minutes: say so up front.</summary>
+        public static FrameworkElement ScanDurationNote() => Notice(Icons.Stopwatch, "Moderate", Loc.S(
+            "El análisis puede tardar varios minutos según tu equipo. Mientras tanto puedes usar las herramientas del menú.",
+            "The scan can take a few minutes depending on your PC. You can use the tools in the menu meanwhile."));
+
         public static FrameworkElement Empty(string text) => Notice(Icons.Info, "FgMuted", text);
 
         /// <summary>A text box with a visible placeholder that disappears while typing. Escape clears it.</summary>

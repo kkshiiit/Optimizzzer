@@ -178,14 +178,21 @@ namespace Optimizzzer.App.Pages
             return t;
         }
 
+        /// <summary>Self-test only: true while the scan step shows the loading view.</summary>
+        public bool ShowsScanLoadingForTest { get; private set; }
+
+        /// <summary>Self-test only: the same call as the "Scan again" button.</summary>
+        public Task RescanForTest() => ScanAsync(true);
+
         private FrameworkElement BuildScan()
         {
-            if (S.Scanning || (S.ScanResults == null && S.ScanError == null))
+            ShowsScanLoadingForTest = S.Scanning || (S.ScanResults == null && S.ScanError == null);
+            if (ShowsScanLoadingForTest)
             {
                 var (view, update) = Ui.Loading(Loc.S("Leyendo la información del equipo…", "Reading PC information…"));
                 _scanProgress = update;
                 return StepFrame(Loc.S("Analizando tu equipo", "Scanning your PC"),
-                    Loc.S("Solo se lee. No se cambia nada hasta el paso Aplicar.", "Read only. Nothing changes until the Apply step."), view, null);
+                    Loc.S("Solo se lee. No se cambia nada hasta el paso Aplicar.", "Read only. Nothing changes until the Apply step."), Ui.Stack(16, view, Ui.ScanDurationNote()), null);
             }
             if (S.ScanError != null)
             {
@@ -222,7 +229,9 @@ namespace Optimizzzer.App.Pages
                 "Antes de aplicar se crea un punto de restauración y se guarda el valor anterior de cada cambio, así que podrás deshacerlos uno a uno desde Historial.",
                 "Before applying, a restore point is created and the previous value of every change is saved, so you can undo them one by one from History."));
 
-            var body = Ui.Stack(16, pc, status, safety);
+            var again = Ui.Muted(Loc.S("\"Volver a analizar\" lee de nuevo todo el equipo y puede tardar varios minutos según tu equipo.",
+                "\"Scan again\" reads the whole PC again and can take a few minutes depending on your PC."), 12);
+            var body = Ui.Stack(16, pc, status, safety, again);
             var footer = Footer(
                 Ui.Secondary(Loc.S("Volver a analizar", "Scan again"), () => _ = ScanAsync(true), Icons.Restart),
                 Ui.Primary(Loc.S("Elegir un perfil", "Choose a profile"), () => GoTo(Step.Profile)));

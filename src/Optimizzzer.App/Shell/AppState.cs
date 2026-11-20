@@ -54,7 +54,10 @@ namespace Optimizzzer.App.Shell
         public event Action<double, string> ScanProgress;
         public event Action ScanFinished;
         private Task _scan;
-        public bool Scanning => _scan != null && !_scan.IsCompleted;
+        // A flag, not _scan.IsCompleted: ScanFinished runs inside the scan task, and pages that rebuild on it
+        // must already see the scan as finished (otherwise they redraw the loading view forever).
+        private bool _scanRunning;
+        public bool Scanning => _scanRunning;
         public string ScanError { get; private set; }
 
         /// <summary>Starts the read-only scan once; callers that arrive while it runs share the same task.</summary>
@@ -62,6 +65,7 @@ namespace Optimizzzer.App.Shell
         {
             if (Scanning) return _scan;
             if (!rescan && ScanResults != null) return Task.CompletedTask;
+            _scanRunning = true;
             _scan = DoScanAsync();
             return _scan;
         }
@@ -83,6 +87,7 @@ namespace Optimizzzer.App.Shell
                 ScanError = ex.Message;
                 ResetInit();
             }
+            finally { _scanRunning = false; }
             ScanFinished?.Invoke();
         }
 

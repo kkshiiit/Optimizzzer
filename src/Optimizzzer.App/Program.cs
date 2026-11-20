@@ -137,6 +137,17 @@ namespace Optimizzzer.App
                 w.UpdateLayout();
                 if (w.CurrentView == null || w.CurrentView.ActualHeight <= 0) throw new Exception("scan result view has no size");
                 log.AppendLine("  wizard scanned " + fresh.ScanResults.Count + " tweaks");
+
+                // The user's case: "Scan again" in Customize used to stay on "Reading PC information" forever.
+                w.Navigate("wizard");
+                var wizard = w.PageOf<Pages.WizardPage>();
+                var again = wizard.RescanForTest();
+                var rescanUntil = DateTime.Now.AddSeconds(120);
+                while (!again.IsCompleted && DateTime.Now < rescanUntil) Pump();
+                for (int i = 0; i < 5; i++) Pump();
+                if (!again.IsCompleted) throw new Exception("rescan from Customize did not finish");
+                if (wizard.ShowsScanLoadingForTest) throw new Exception("rescan from Customize finished but the page still shows the loading view");
+                log.AppendLine("  rescan from Customize shows the results");
                 w.Close();
             });
             Check("read-only scan", () =>
