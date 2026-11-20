@@ -272,6 +272,7 @@ namespace Optimizzzer.App
                     Pump(); w.UpdateLayout();
                     SelfTestTools.Screenshot(w, "Light-Es-level-result");
                     var s = state.LastSession;
+                    foreach (var b in s.Entries.Where(e => e.ResultKind == EntryResult.Blocked)) log.AppendLine("  blocked by Windows (not a failure): " + b.TweakId);
                     var bad = s.Entries.Where(e => e.ResultKind == EntryResult.Failed).Select(e => e.TweakId + ": " + e.Error).ToList();
                     if (bad.Count > 0) throw new Exception("failed: " + string.Join("; ", bad));
                     var undo = state.Engine.UndoSession(s.Id, TweakCatalog.All.ToList());

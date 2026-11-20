@@ -45,7 +45,19 @@ namespace Optimizzzer.Windows
             }
         }
 
-        public void SetValue(Hive hive, string path, string name, RegValue value)
+        /// <summary>Turns "access denied" into ProtectedSettingException: as administrator, only Windows' own protection refuses.</summary>
+        private static void Guard(Hive hive, string path, Action a)
+        {
+            try { a(); }
+            catch (UnauthorizedAccessException ex) { throw new ProtectedSettingException(RegPathName(hive, path), ex); }
+            catch (System.Security.SecurityException ex) { throw new ProtectedSettingException(RegPathName(hive, path), ex); }
+        }
+
+        private static string RegPathName(Hive h, string p) => (h == Hive.LocalMachine ? "HKLM" : h == Hive.CurrentUser ? "HKCU" : h.ToString()) + "\\" + p;
+
+        public void SetValue(Hive hive, string path, string name, RegValue value) => Guard(hive, path, () => SetValueCore(hive, path, name, value));
+
+        private void SetValueCore(Hive hive, string path, string name, RegValue value)
         {
             using (var root = Root(hive))
             using (var k = root.CreateSubKey(path, true))

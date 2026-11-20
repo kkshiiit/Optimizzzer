@@ -631,6 +631,7 @@ namespace Optimizzzer.App.Pages
             {
                 case EntryResult.Applied: return Ui.Notice(Icons.CheckCircle, "Success", Loc.S(t.Title));
                 case EntryResult.Skipped: return Ui.Notice(Icons.Info, "FgMuted", Loc.S(t.Title) + Loc.S(" (ya estaba aplicado)", " (already applied)"));
+                case EntryResult.Blocked: return Ui.Notice(Icons.Lock, "Moderate", Loc.S(t.Title) + Loc.S(": Windows protege este ajuste en este equipo. No se cambió nada; puedes hacerlo desde Configuración de Windows.", ": Windows protects this setting on this PC. Nothing was changed; you can do it from Windows Settings."));
                 default: return Ui.Notice(Icons.Error, "Advanced", Loc.S(t.Title) + ": " + e.Error + Loc.S(" (revertido)", " (rolled back)"));
             }
         }
@@ -643,6 +644,7 @@ namespace Optimizzzer.App.Pages
             if (s == null) return BuildScan();
             int ok = s.Entries.Count(e => e.ResultKind == EntryResult.Applied);
             int failed = s.Entries.Count(e => e.ResultKind == EntryResult.Failed);
+            int blocked = s.Entries.Count(e => e.ResultKind == EntryResult.Blocked);
             int skipped = s.Entries.Count(e => e.ResultKind == EntryResult.Skipped);
             int notAttempted = _notAttempted;
             var applied = s.Entries.Where(e => e.ResultKind == EntryResult.Applied).Select(e => S.Catalog.FirstOrDefault(t => t.Id == e.TweakId)).Where(t => t != null).ToList();
@@ -651,6 +653,7 @@ namespace Optimizzzer.App.Pages
             var summary = Ui.Stack(8,
                 Ui.Notice(Icons.CheckCircle, "Success", ok + Loc.S(" cambios aplicados.", " changes applied.")),
                 skipped > 0 ? Ui.Notice(Icons.Info, "FgMuted", skipped + Loc.S(" ya estaban aplicados.", " were already applied.")) : null,
+                blocked > 0 ? Ui.Notice(Icons.Lock, "Moderate", blocked + Loc.S(" no se aplicaron porque Windows protege ese ajuste en este equipo. No se volverán a ofrecer aquí; puedes cambiarlos desde Configuración de Windows.", " were not applied because Windows protects that setting on this PC. They will not be offered here again; you can change them from Windows Settings.")) : null,
                 notAttempted > 0 ? Ui.Notice(Icons.Stop, "Moderate", notAttempted + Loc.S(" no se aplicaron porque detuviste el proceso. Siguen seleccionados en el paso Selección.", " were not applied because you stopped. They are still selected in the Selection step.")) : null,
                 failed > 0 ? Ui.Notice(Icons.Error, "Advanced", failed + Loc.S(" fallaron y se revirtieron. Mira el detalle en Historial.", " failed and were rolled back. See details in History.")) : null,
                 s.RestorePointCreated

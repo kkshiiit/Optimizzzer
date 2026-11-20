@@ -54,6 +54,7 @@ namespace Optimizzzer.Core
         public TweakStatus Detect(Tweak t)
         {
             if (!t.IsApplicable(_ctx.Info)) return TweakStatus.NotApplicable;
+            if (Blocked().Contains(t.Id)) return TweakStatus.NotApplicable;
             int applied = 0, notApplied = 0;
             foreach (var a in t.Actions)
             {
@@ -145,19 +146,50 @@ namespace Optimizzzer.Core
                 }
                 entry.Result = EntryResult.Applied.ToString();
             }
+            catch (ProtectedSettingException ex)
+            {
+                RollBack(t, entry, done);
+                entry.Result = EntryResult.Blocked.ToString();
+                entry.Error = ex.Message;
+                entry.Reverted = true;
+                entry.RevertedUtc = _clock().ToString("o", CultureInfo.InvariantCulture);
+                _blocked?.Add(t.Id);
+            }
             catch (Exception ex)
             {
                 // Put back whatever part of this tweak already ran, so a failure never leaves it half applied.
-                foreach (var rec in entry.Actions.Where(r => done.Contains(r.Index)).Reverse())
-                {
-                    try { t.Actions[rec.Index].Revert(_ctx, rec.Snapshot); } catch (Exception) { }
-                }
+                RollBack(t, entry, done);
                 entry.Result = EntryResult.Failed.ToString();
                 entry.Error = ex.Message;
                 entry.Reverted = true;
                 entry.RevertedUtc = _clock().ToString("o", CultureInfo.InvariantCulture);
             }
             return entry;
+        }
+
+        private void RollBack(Tweak t, JournalEntry entry, List<int> done)
+        {
+            foreach (var rec in entry.Actions.Where(r => done.Contains(r.Index)).Reverse())
+            {
+                try { t.Actions[rec.Index].Revert(_ctx, rec.Snapshot); } catch (Exception) { }
+            }
+        }
+
+        private HashSet<string> _blocked;
+
+        /// <summary>Tweaks Windows refused on this PC before; they detect as not applicable from then on.</summary>
+        private HashSet<string> Blocked()
+        {
+            if (_blocked != null) return _blocked;
+            var set = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            try
+            {
+                foreach (var e in _store.LoadAll().SelectMany(s => s.Entries))
+                    if (e.ResultKind == EntryResult.Blocked) set.Add(e.TweakId);
+                    else if (e.ResultKind == EntryResult.Applied) set.Remove(e.TweakId);
+            }
+            catch (Exception) { }
+            return _blocked = set;
         }
 
         private static bool SameId(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);

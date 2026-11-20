@@ -266,3 +266,26 @@ namespace Optimizzzer.Tests
         }
     }
 }
+
+namespace Optimizzzer.Tests
+{
+    public class BlockedTests
+    {
+        [Xunit.Fact]
+        public void A_setting_Windows_protects_is_blocked_rolled_back_and_not_offered_again()
+        {
+            var sys = new FakeSystem();
+            var store = new Optimizzzer.Core.MemoryJournalStore();
+            var engine = new Optimizzzer.Core.TweakEngine(sys.Context, store);
+            var t = Optimizzzer.Core.Catalog.TweakCatalog.Find("privacy.activityHistory");
+            sys.Registry.ProtectOnSet = (h, p, n) => n == "UploadUserActivities";
+            var before = sys.Dump();
+            var s = engine.Apply(new[] { t }, new Optimizzzer.Core.ApplyOptions());
+            Xunit.Assert.Equal(Optimizzzer.Core.EntryResult.Blocked, s.Entries[0].ResultKind);
+            Xunit.Assert.Equal(before, sys.Dump());
+            Xunit.Assert.Equal(Optimizzzer.Core.TweakStatus.NotApplicable, engine.Detect(t));
+            // A new engine (next app start) remembers it from the journal.
+            Xunit.Assert.Equal(Optimizzzer.Core.TweakStatus.NotApplicable, new Optimizzzer.Core.TweakEngine(sys.Context, store).Detect(t));
+        }
+    }
+}

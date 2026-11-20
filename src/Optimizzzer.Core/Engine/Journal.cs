@@ -20,7 +20,8 @@ namespace Optimizzzer.Core
         public DateTime Started => DateTime.Parse(StartedUtc, null, System.Globalization.DateTimeStyles.RoundtripKind);
     }
 
-    public enum EntryResult { Applied, Failed, Skipped }
+    /// <summary>Blocked: Windows itself refused the change (a protected setting). It was rolled back and is not offered again.</summary>
+    public enum EntryResult { Applied, Failed, Skipped, Blocked }
 
     [DataContract]
     public sealed class JournalEntry

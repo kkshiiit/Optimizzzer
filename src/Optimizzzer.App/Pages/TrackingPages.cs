@@ -81,7 +81,8 @@ namespace Optimizzzer.App.Pages
                     var t = undoCatalog.FirstOrDefault(x => x.Id == e.TweakId);
                     var title = t != null ? Loc.S(t.Title) : e.TweakId;
                     string stateText; string brush; string icon;
-                    if (e.ResultKind == EntryResult.Failed) { stateText = Loc.S("Falló y se revirtió: ", "Failed and rolled back: ") + e.Error; brush = "Advanced"; icon = Icons.Error; }
+                    if (e.ResultKind == EntryResult.Blocked) { stateText = Loc.S("Windows protege este ajuste; no se cambió nada.", "Windows protects this setting; nothing was changed."); brush = "Moderate"; icon = Icons.Lock; }
+                    else if (e.ResultKind == EntryResult.Failed) { stateText = Loc.S("Falló y se revirtió: ", "Failed and rolled back: ") + e.Error; brush = "Advanced"; icon = Icons.Error; }
                     else if (e.Reverted) { stateText = Loc.S("Deshecho", "Undone"); brush = "FgMuted"; icon = Icons.Undo; }
                     else { stateText = Loc.S("Aplicado", "Applied"); brush = "Success"; icon = Icons.CheckCircle; }
                     var info = Ui.Stack(2, Ui.Text(title, 14, true), Ui.Text(stateText, 12, false, brush));

@@ -26,6 +26,12 @@ namespace Optimizzzer.Core
         bool CanWrite(Hive hive, string path);
     }
 
+    /// <summary>Thrown when Windows refuses to change a protected setting, even to an administrator.</summary>
+    public sealed class ProtectedSettingException : Exception
+    {
+        public ProtectedSettingException(string what, Exception inner) : base("Windows protects " + what, inner) { }
+    }
+
     public enum StartMode { Boot, System, Automatic, AutomaticDelayed, Manual, Disabled }
 
     public interface IServiceManager
