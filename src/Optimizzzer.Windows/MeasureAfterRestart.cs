@@ -30,6 +30,17 @@ namespace Optimizzzer.Windows
             if (!r.Ok) throw new InvalidOperationException("schtasks: " + (r.Output + r.Error).Trim());
         }
 
+        /// <summary>At startup, off the UI thread: deletes the exe copy when no measurement is pending (it already ran).</summary>
+        public static void CleanupLeftovers(IProcessRunner proc)
+        {
+            try
+            {
+                var exe = System.IO.Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Optimizzzer", "bin", "Optimizzzer.exe");
+                if (System.IO.File.Exists(exe) && !IsScheduled(proc)) Cancel(proc);
+            }
+            catch (Exception) { }
+        }
+
         /// <summary>Removes the task and the copy of the exe it used, so nothing stays behind.</summary>
         public static void Cancel(IProcessRunner proc)
         {

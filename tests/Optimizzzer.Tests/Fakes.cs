@@ -103,6 +103,9 @@ namespace Optimizzzer.Tests
         public string ActiveScheme { get; set; } = "381b4222-f694-41f0-9685-ff5bb260df2e";
         public HashSet<string> Schemes { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "381b4222-f694-41f0-9685-ff5bb260df2e" };
         public FakeRegistry Registry { get; set; }
+        /// <summary>What "tasklist /fo csv /nh" prints.</summary>
+        public string TaskList { get; set; } = "";
+        public List<string> Killed { get; } = new List<string>();
 
         /// <summary>The next powercfg call whose arguments contain this text fails.</summary>
         public string FailNext { get; set; }
@@ -123,6 +126,8 @@ namespace Optimizzzer.Tests
                 if (arguments.Contains("/disable-feature")) { VmpEnabled = false; return new ProcessResult(3010, "", ""); }
                 if (arguments.Contains("/enable-feature")) { VmpEnabled = true; return new ProcessResult(3010, "", ""); }
             }
+            if (file == "tasklist") return new ProcessResult(0, TaskList, "");
+            if (file == "taskkill") { Killed.Add(arguments); return new ProcessResult(0, "", ""); }
             if (file != "powercfg") return new ProcessResult(0, "", "");
             var a = arguments.Split(' ');
             switch (a[0].ToLowerInvariant())

@@ -54,6 +54,7 @@ namespace Optimizzzer.App
             Theme.Configure(state.SavedTheme, state.SavedAccent, state.SavedLite);
             Theme.WatchSystem();
             var window = new MainWindow(state);
+            System.Threading.Tasks.Task.Run(() => Optimizzzer.Windows.MeasureAfterRestart.CleanupLeftovers(state.Win.Process));
             return app.Run(window);
         }
 
@@ -133,6 +134,7 @@ namespace Optimizzzer.App
                 if (fresh.ScanResults == null) throw new Exception("the home scan did not finish");
                 var workingSetMb = System.Diagnostics.Process.GetCurrentProcess().WorkingSet64 / 1024 / 1024;
                 log.AppendLine("  window visible after " + shownMs + " ms; working set after scan " + workingSetMb + " MB");
+                lock (MainWindow.StartupTrace) log.AppendLine("  startup: " + string.Join(", ", MainWindow.StartupTrace));
                 if (shownMs > 2000) throw new Exception("window took " + shownMs + " ms to appear (limit 2000)");
                 if (workingSetMb > 200) throw new Exception("working set " + workingSetMb + " MB (limit 200)");
                 Pump();
@@ -285,6 +287,30 @@ namespace Optimizzzer.App
                 if (w.IsFullScreen || w.WindowStyle != WindowStyle.SingleBorderWindow || w.WindowState != WindowState.Normal) throw new Exception("F11 did not restore the window");
                 w.Close();
             });
+
+            // Temporary game mode on a throwaway machine: plan and Windows Update pause change, then come back exactly.
+            if (Environment.GetEnvironmentVariable("OPTIMIZZZER_SELFTEST_APPLY") == "1")
+                Check("temporary game mode on and off", () =>
+                {
+                    var w = new MainWindow(state) { ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
+                    w.Show();
+                    state.EnsureReadyAsync().GetAwaiter().GetResult();
+                    string Read(string n) => state.Ctx.Registry.GetValue(Optimizzzer.Core.Hive.LocalMachine, GameSession.WuKey, n)?.Data as string;
+                    var schemeBefore = GameSession.ActiveScheme(state.Ctx);
+                    var pauseBefore = Read("PauseUpdatesExpiryTime");
+                    var t = w.GameMode.StartForTestAsync();
+                    while (!t.IsCompleted) Pump();
+                    var st = t.GetAwaiter().GetResult();
+                    log.AppendLine("  plan " + schemeBefore + " -> " + GameSession.ActiveScheme(state.Ctx) + ", pause until " + Read("PauseUpdatesExpiryTime") + ", plan changed " + st.SchemeChanged);
+                    if (!st.UpdatesPaused || Read("PauseUpdatesExpiryTime") == null) throw new Exception("updates were not paused");
+                    var stop = w.GameMode.StopAsync();
+                    while (!stop.IsCompleted) Pump();
+                    stop.GetAwaiter().GetResult();
+                    if (GameSession.ActiveScheme(state.Ctx) != schemeBefore) throw new Exception("power plan not restored");
+                    if (Read("PauseUpdatesExpiryTime") != pauseBefore) throw new Exception("pause values not restored");
+                    if (System.IO.File.Exists(System.IO.Path.Combine(state.Win.DataDir, "gamemode.txt"))) throw new Exception("state file left behind");
+                    w.Close();
+                });
 
             // Only on a throwaway machine (CI sets this variable): apply two tweaks through the wizard UI, then undo them.
             if (Environment.GetEnvironmentVariable("OPTIMIZZZER_SELFTEST_APPLY") == "1")

@@ -42,8 +42,15 @@ namespace Optimizzzer.App.Shell
         public static bool Compact { get; private set; }
         private IInputElement _focusBeforeOverlay;
 
+        /// <summary>Milestones of the window's construction, for the self-test's start-time check.</summary>
+        public static readonly List<string> StartupTrace = new List<string>();
+        private static readonly System.Diagnostics.Stopwatch TraceClock = new System.Diagnostics.Stopwatch();
+        private static void Mark(string what) { lock (StartupTrace) StartupTrace.Add(what + " " + TraceClock.ElapsedMilliseconds + " ms"); }
+
         public MainWindow(AppState state)
         {
+            lock (StartupTrace) StartupTrace.Clear();
+            TraceClock.Restart();
             _state = state;
             Title = "Optimizzzer";
             try
@@ -52,6 +59,7 @@ namespace Optimizzzer.App.Shell
                     if (ico != null) Icon = System.Windows.Media.Imaging.BitmapFrame.Create(ico, System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
             }
             catch (Exception) { } // the window works without its icon
+            Mark("icon");
             MinWidth = 640; MinHeight = 480;
             PlaceOnScreen();
             UseLayoutRounding = true;
@@ -78,6 +86,7 @@ namespace Optimizzzer.App.Shell
             _pages.Add(new SettingsPage(state, this));
             _pages.Add(new HelpPage(state, this));
 
+            Mark("pages");
             _navColumn = new ColumnDefinition { Width = GridLength.Auto };
             _root.ColumnDefinitions.Add(_navColumn);
             _root.ColumnDefinitions.Add(new ColumnDefinition());
@@ -87,6 +96,7 @@ namespace Optimizzzer.App.Shell
             var right = new Grid();
             right.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
             right.RowDefinitions.Add(new RowDefinition());
+            Mark("nav");
             right.Children.Add(BuildHeader());
 
             // The content surface floats above the window background: the first thing the eye lands on.
@@ -106,20 +116,26 @@ namespace Optimizzzer.App.Shell
             _root.Children.Add(_overlay);
             Content = _root;
             ApplyTextScale();
+            Mark("layout");
 
             PreviewKeyDown += OnKey;
             SizeChanged += (_, __) => UpdateLayoutMode();
             Closing += (_, __) => RememberPlacement();
-            SourceInitialized += (_, __) => Theme.MatchTitleBar(this);
+            SourceInitialized += (_, __) => { Mark("source initialized"); Theme.MatchTitleBar(this); Mark("title bar"); };
+            Loaded += (_, __) => Mark("loaded");
             Theme.Changed += OnThemeChanged;
             Closed += (_, __) => Theme.Changed -= OnThemeChanged;
             ContentRendered += (_, __) =>
             {
+                Mark("content rendered");
                 if (!_state.TourDone && !Program.InSelfTest) Dispatcher.BeginInvoke(new Action(ShowTour), DispatcherPriority.ApplicationIdle);
             };
+            GameMode = new GameModeController(state, this);
             Navigate("home");
+            Mark("home");
         }
 
+        public GameModeController GameMode { get; }
         public IReadOnlyList<AppPage> Pages => _pages;
         public AppPage CurrentPage => _current;
 
