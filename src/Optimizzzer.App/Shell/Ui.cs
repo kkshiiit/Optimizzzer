@@ -45,6 +45,7 @@ namespace Optimizzzer.App.Shell
         public const string Home = "\uE80F";
         public const string Help = "\uE897";
         public const string Export = "\uEDE1";
+        public const string More = "\uE712";
         public const string Import = "\uE8B5";
         public const string Glossary = "\uE82D";    // Dictionary
         public const string Keyboard = "\uE765";
@@ -181,6 +182,37 @@ namespace Optimizzzer.App.Shell
             return t;
         }
 
+        /// <summary>
+        /// Secondary text cut to a few lines so long lists stay scannable. Long texts get a "Show more" toggle;
+        /// the full text is always in the tooltip and for screen readers.
+        /// </summary>
+        public static FrameworkElement Clamped(string text, double size = 12, int lines = 2, int longAfter = 140)
+        {
+            var t = Muted(text, size);
+            t.LineStackingStrategy = LineStackingStrategy.BlockLineHeight;
+            t.LineHeight = Math.Round(size * 1.4);
+            AutomationProperties.SetName(t, text);
+            if (string.IsNullOrEmpty(text) || text.Length <= longAfter) return t;
+            double clamp = t.LineHeight * lines;
+            t.MaxHeight = clamp;
+            t.TextTrimming = TextTrimming.WordEllipsis;
+            t.ToolTip = text;
+            var more = Button(Loc.S("Ver más", "Show more"), "SubtleButton", null);
+            more.MinHeight = 28;
+            more.Padding = new Thickness(0);
+            more.FontSize = size;
+            more.HorizontalAlignment = HorizontalAlignment.Left;
+            more.SetResourceReference(Control.ForegroundProperty, "AccentText");
+            more.Click += (_, __) =>
+            {
+                bool open = double.IsInfinity(t.MaxHeight);
+                t.MaxHeight = open ? clamp : double.PositiveInfinity;
+                more.Content = open ? Loc.S("Ver más", "Show more") : Loc.S("Ver menos", "Show less");
+                AutomationProperties.SetName(more, (string)more.Content);
+            };
+            return Stack(0, t, more);
+        }
+
         public static TextBlock H1(string text) { var t = Text(text, 28, true); t.Margin = new Thickness(0, 0, 0, 4); return t; }
         public static TextBlock H2(string text) { var t = Text(text, 20, true); t.Margin = new Thickness(0, 0, 0, 4); return t; }
         public static TextBlock H3(string text) { var t = Text(text, 16, true); return t; }
@@ -244,6 +276,24 @@ namespace Optimizzzer.App.Shell
         public static Button Primary(string text, Action onClick, string icon = null) => Button(text, "PrimaryButton", onClick, icon);
         public static Button Secondary(string text, Action onClick, string icon = null) => Button(text, "SecondaryButton", onClick, icon);
         public static Button Subtle(string text, Action onClick, string icon = null, string automationName = null) => Button(text, "SubtleButton", onClick, icon, automationName);
+
+        /// <summary>A button that opens a small menu of related actions (keyboard: Enter or Space, then arrows).</summary>
+        public static Button MenuButton(string text, string icon, params (string Text, string Icon, Action Run)[] items)
+        {
+            var b = Button(text, "SubtleButton", null, icon);
+            var menu = new ContextMenu { PlacementTarget = b, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
+            foreach (var (label, glyph, run) in items)
+            {
+                var mi = new MenuItem { Header = label, Icon = Icon(glyph, 16) };
+                AutomationProperties.SetName(mi, label);
+                mi.Click += (_, __) => run();
+                menu.Items.Add(mi);
+            }
+            b.Click += (_, __) => { menu.IsOpen = true; };
+            AutomationProperties.SetName(b, text);
+            b.SetValue(AutomationProperties.HelpTextProperty, string.Join(", ", System.Linq.Enumerable.Select(items, i => i.Text)));
+            return b;
+        }
 
         public static Border Divider(double top = 0, double bottom = 0)
         {

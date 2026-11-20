@@ -391,26 +391,33 @@ namespace Optimizzzer.App.Pages
             var hideNa = new CheckBox { Content = Loc.S("Ocultar los que no aplican", "Hide the ones that do not apply"), IsChecked = _hideNotApplicable, Margin = new Thickness(16, 0, 0, 0) };
             hideNa.Checked += (_, __) => { _hideNotApplicable = true; ApplyFilter(); };
             hideNa.Unchecked += (_, __) => { _hideNotApplicable = false; ApplyFilter(); };
-            var selectSafe = Ui.Subtle(Loc.S("Marcar los seguros visibles", "Tick visible safe ones"), () =>
+            void SelectSafe()
             {
                 foreach (var kv in rows.Where(r => r.Value.Visibility == Visibility.Visible && r.Key.Risk == Risk.Safe && r.Value.CanSelect))
                     kv.Value.SetChecked(true);
-            }, Icons.CheckCircle);
-            var clear = Ui.Subtle(Loc.S("Desmarcar visibles", "Untick visible"), () =>
+            }
+            void ClearVisible()
             {
                 foreach (var kv in rows.Where(r => r.Value.Visibility == Visibility.Visible)) kv.Value.SetChecked(false);
-            }, Icons.Close);
-            var toolbar = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+            }
+            // One row: search, the filter that changes the list, and the less frequent actions behind "More actions".
+            var more = Ui.MenuButton(Loc.S("Más acciones", "More actions"), Icons.More,
+                (Loc.S("Marcar los seguros visibles", "Tick visible safe ones"), Icons.CheckCircle, (Action)SelectSafe),
+                (Loc.S("Desmarcar visibles", "Untick visible"), Icons.Close, ClearVisible),
+                (Loc.S("Exportar la selección…", "Export the selection…"), Icons.Export, ExportSelection),
+                (Loc.S("Importar una selección…", "Import a selection…"), Icons.Import, ImportSelection));
+            var toolbar = new Grid { Margin = new Thickness(0, 0, 0, 12) };
+            toolbar.ColumnDefinitions.Add(new ColumnDefinition { MaxWidth = 320 });
+            toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            toolbar.ColumnDefinitions.Add(new ColumnDefinition());
+            toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             toolbar.Children.Add(search);
             hideNa.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(hideNa, 1);
             toolbar.Children.Add(hideNa);
-            selectSafe.Margin = new Thickness(8, 0, 0, 0);
-            toolbar.Children.Add(selectSafe);
-            toolbar.Children.Add(clear);
-            var export = Ui.Subtle(Loc.S("Exportar", "Export"), ExportSelection, Icons.Export, Loc.S("Exportar la selección a un archivo", "Export the selection to a file"));
-            var import = Ui.Subtle(Loc.S("Importar", "Import"), ImportSelection, Icons.Import, Loc.S("Importar una selección desde un archivo", "Import a selection from a file"));
-            toolbar.Children.Add(export);
-            toolbar.Children.Add(import);
+            more.Margin = new Thickness(8, 0, 0, 0);
+            Grid.SetColumn(more, 3);
+            toolbar.Children.Add(more);
 
             var main = new Grid();
             main.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(240) });
@@ -691,7 +698,7 @@ namespace Optimizzzer.App.Pages
             var actions = new WrapPanel { Margin = new Thickness(0, 16, 0, 0) };
             void Add(Button b) { b.Margin = new Thickness(0, 0, 8, 8); actions.Children.Add(b); }
             if (restart == RestartKind.Explorer || applied.Any(t => t.Restart == RestartKind.Explorer))
-                Add(Ui.Secondary(Loc.S("Reiniciar el Explorador ahora", "Restart File Explorer now"), () => Task.Run(() => S.Win.RestartExplorer()), Icons.Restart));
+                Add(Ui.Secondary(Loc.S("Reiniciar el Explorador ahora", "Restart File Explorer now"), RestartExplorerAsync, Icons.Restart));
             if (restart >= RestartKind.SignOut)
                 Add(Ui.Secondary(Loc.S("Reiniciar el equipo", "Restart the PC"), async () =>
                 {
@@ -742,6 +749,19 @@ namespace Optimizzzer.App.Pages
                 ? (_level != null ? Loc.S("Nivel " + _level.Name.Es + " aplicado", _level.Name.En + " level applied") : Loc.S("Listo", "Done"))
                 : Loc.S("Terminado con avisos", "Finished with warnings");
             return StepFrame(heading, null, Ui.Stack(0, mark, summary, actions, measures), footer);
+        }
+
+        private async void RestartExplorerAsync()
+        {
+            try
+            {
+                await Task.Run(() => S.Win.RestartExplorer());
+                W.Toast(ToastKind.Success, Loc.S("Explorador reiniciado: la barra de tareas y el menú Inicio ya muestran los cambios.", "File Explorer restarted: the taskbar and Start now show the changes."));
+            }
+            catch (Exception ex)
+            {
+                W.ShowError(ex.Message, Loc.S("Cierra sesión y vuelve a entrar para ver los cambios.", "Sign out and back in to see the changes."));
+            }
         }
 
         /// <summary>Shown once when an apply ends, never when the result screen is redrawn later.</summary>

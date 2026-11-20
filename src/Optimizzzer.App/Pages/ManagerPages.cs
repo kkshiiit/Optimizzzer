@@ -75,7 +75,7 @@ namespace Optimizzzer.App.Pages
         {
             var info = Ui.Stack(2,
                 Ui.Row(10, Ui.Text(i.DisplayName, 14, true), Ui.Text(i.Running ? Loc.S("En ejecución", "Running") : Loc.S("Detenido", "Stopped"), 12, false, i.Running ? "Success" : "FgMuted", wrap: false)),
-                Ui.Muted(i.Name + (string.IsNullOrEmpty(i.Description) ? "" : " · " + i.Description), 12));
+                Ui.Clamped(i.Name + (string.IsNullOrEmpty(i.Description) ? "" : " · " + i.Description)));
             FrameworkElement right;
             if (i.Protected)
             {
@@ -169,7 +169,7 @@ namespace Optimizzzer.App.Pages
             };
             var last = i.LastRun.HasValue ? Loc.S("Última ejecución: ", "Last run: ") + i.LastRun.Value.ToString("g") : Loc.S("Nunca se ha ejecutado", "Never run");
             var info = Ui.Stack(2, Ui.Text(i.Name, 14, true), Ui.Muted(i.Folder + " · " + last, 12),
-                string.IsNullOrWhiteSpace(i.Description) ? null : Ui.Muted(i.Description, 12));
+                string.IsNullOrWhiteSpace(i.Description) ? null : Ui.Clamped(i.Description));
             return CleanupPage.Row(Ui.Icon(Icons.Tasks, 16, "FgMuted"), info, sw);
         }
     }

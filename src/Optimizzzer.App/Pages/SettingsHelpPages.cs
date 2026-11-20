@@ -58,6 +58,7 @@ namespace Optimizzzer.App.Pages
             }, Theme.Choice, v => { Theme.Apply(v); Changed(); });
 
             var swatches = new StackPanel { Orientation = Orientation.Horizontal };
+            string accentName = null;
             AutomationProperties.SetName(swatches, Loc.S("Color de acento", "Accent color"));
             foreach (var (a, label) in new[]
             {
@@ -65,6 +66,7 @@ namespace Optimizzzer.App.Pages
                 (AccentChoice.Green, Loc.S("Verde", "Green")), (AccentChoice.Violet, Loc.S("Violeta", "Violet")), (AccentChoice.Orange, Loc.S("Naranja", "Orange")),
             })
             {
+                if (Theme.Accent == a) accentName = label;
                 var rb = new RadioButton { GroupName = "accent", IsChecked = Theme.Accent == a, Background = Theme.Brush(Theme.PreviewOf(a)), ToolTip = label, Margin = new Thickness(0, 0, 4, 0) };
                 rb.SetResourceReference(FrameworkElement.StyleProperty, "Swatch");
                 AutomationProperties.SetName(rb, label);
@@ -93,7 +95,7 @@ namespace Optimizzzer.App.Pages
             var version = typeof(SettingsPage).Assembly.GetName().Version;
             var body = Ui.Stack(0,
                 Setting(Loc.S("Tema", "Theme"), Loc.S("\"Sistema\" sigue el modo claro u oscuro de Windows.", "\"System\" follows Windows light or dark mode."), theme),
-                Setting(Loc.S("Color de acento", "Accent color"), Loc.S("Se ajusta solo para que el texto siempre se lea bien.", "Adjusted automatically so text always stays readable."), swatches),
+                Setting(Loc.S("Color de acento", "Accent color"), Loc.S("Ahora: ", "Now: ") + accentName + Loc.S(". Se ajusta solo para que el texto siempre se lea bien.", ". Adjusted automatically so text always stays readable."), swatches),
                 Setting(Loc.S("Idioma", "Language"), null, lang),
                 Setting(Loc.S("Modo ligero", "Lite mode"), Loc.S("Quita animaciones y sombras para que vaya fluido en equipos modestos. ", "Removes animations and shadows so it stays smooth on modest PCs. ") + liteState, lite),
                 Setting(Loc.S("Recorrido de bienvenida", "Welcome tour"), Loc.S("Tres pasos que explican cómo funciona.", "Three steps that explain how it works."), tour),

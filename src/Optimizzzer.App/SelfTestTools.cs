@@ -22,10 +22,19 @@ namespace Optimizzzer.App
         public static void Screenshot(Window w, string name)
         {
             Directory.CreateDirectory(ShotsDir);
-            int width = (int)Math.Ceiling(w.ActualWidth), height = (int)Math.Ceiling(w.ActualHeight);
+            // Render the client area only: the window's outer size includes the frame, which WPF leaves blank.
+            var root = w.Content as FrameworkElement ?? (FrameworkElement)w;
+            int width = (int)Math.Ceiling(root.ActualWidth), height = (int)Math.Ceiling(root.ActualHeight);
             if (width <= 0 || height <= 0) return;
             var bmp = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
-            bmp.Render(w);
+            var brush = new VisualBrush(root);
+            var dv = new DrawingVisual();
+            using (var dc = dv.RenderOpen())
+            {
+                dc.DrawRectangle(w.Background ?? Brushes.White, null, new Rect(0, 0, width, height));
+                dc.DrawRectangle(brush, null, new Rect(0, 0, width, height));
+            }
+            bmp.Render(dv);
             var enc = new PngBitmapEncoder();
             enc.Frames.Add(BitmapFrame.Create(bmp));
             var safe = string.Concat(name.Select(c => char.IsLetterOrDigit(c) || c == '-' ? c : '_'));

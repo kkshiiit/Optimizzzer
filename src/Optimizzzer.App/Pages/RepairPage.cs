@@ -90,7 +90,12 @@ namespace Optimizzzer.App.Pages
                 }
                 if (t.RestartsExplorer)
                 {
-                    try { await Task.Run(() => S.Win.RestartExplorer()); } catch (Exception ex) { Append(ex.Message); }
+                    try
+                    {
+                        await Task.Run(() => S.Win.RestartExplorer());
+                        Append(Loc.S("Explorador reiniciado.", "File Explorer restarted."));
+                    }
+                    catch (Exception ex) { Append(ex.Message); ok = false; }
                 }
             }
             _lastResult = ok ? "✓ " + Loc.S("Terminado", "Finished") : Loc.S("Terminado con errores, revisa la salida", "Finished with errors, check the output");
