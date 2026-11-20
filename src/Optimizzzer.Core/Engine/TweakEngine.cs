@@ -135,8 +135,9 @@ namespace Optimizzzer.Core
                     if (state != ActionState.NotApplied) continue;
                     var record = new ActionRecord { Index = i, Description = a.Describe(Lang.En), Snapshot = a.Snapshot(_ctx) };
                     entry.Actions.Add(record);
-                    a.Apply(_ctx);
+                    // Recorded before Apply: an action that changes something and then throws must be rolled back too.
                     done.Add(i);
+                    a.Apply(_ctx);
                 }
                 entry.Result = EntryResult.Applied.ToString();
             }
@@ -170,9 +171,13 @@ namespace Optimizzzer.Core
             // The earliest entry holds the original state; later ones only re-applied after Windows reverted it.
             var first = open[0].e;
             bool ok = RevertEntry(tweak, first);
-            var now = _clock().ToString("o", CultureInfo.InvariantCulture);
-            foreach (var x in open) { x.e.Reverted = true; x.e.RevertedUtc = now; }
-            foreach (var s in open.Select(x => x.s).Distinct()) _store.Save(s);
+            // A failed undo stays open so it can be retried from History.
+            if (ok)
+            {
+                var now = _clock().ToString("o", CultureInfo.InvariantCulture);
+                foreach (var x in open) { x.e.Reverted = true; x.e.RevertedUtc = now; }
+                foreach (var s in open.Select(x => x.s).Distinct()) _store.Save(s);
+            }
             (ok ? result.Reverted : result.Failed).Add(tweakId);
             return result;
         }
@@ -188,8 +193,11 @@ namespace Optimizzzer.Core
                 var tweak = catalog.FirstOrDefault(t => t.Id == e.TweakId);
                 if (tweak == null) { result.Failed.Add(e.TweakId); continue; }
                 bool ok = RevertEntry(tweak, e);
-                e.Reverted = true;
-                e.RevertedUtc = _clock().ToString("o", CultureInfo.InvariantCulture);
+                if (ok)
+                {
+                    e.Reverted = true;
+                    e.RevertedUtc = _clock().ToString("o", CultureInfo.InvariantCulture);
+                }
                 (ok ? result.Reverted : result.Failed).Add(e.TweakId);
             }
             _store.Save(session);
