@@ -137,9 +137,11 @@ namespace Optimizzzer.App
                 var workingSetMb = System.Diagnostics.Process.GetCurrentProcess().WorkingSet64 / 1024 / 1024;
                 log.AppendLine("  window visible after " + shownMs + " ms; working set after scan " + workingSetMb + " MB");
                 lock (MainWindow.StartupTrace) log.AppendLine("  startup: " + string.Join(", ", MainWindow.StartupTrace));
-                // CI's ARM runners are about twice as slow as x64 ones and vary a lot between runs.
-                var arm = (Environment.GetEnvironmentVariable("PROCESSOR_ARCHITECTURE") ?? "").ToUpperInvariant().Contains("ARM");
-                var limitMs = arm ? 4000 : 2000;
+                // A regression guard, not a benchmark: shared CI machines vary 2x between runs of the same commit, and
+                // ARM ones run the app under x64 emulation (so the OS architecture is checked, not the process's).
+                var arm = System.Runtime.InteropServices.RuntimeInformation.OSArchitecture == System.Runtime.InteropServices.Architecture.Arm64;
+                var limitMs = arm ? 6000 : 4000;
+                log.AppendLine("  OS architecture " + System.Runtime.InteropServices.RuntimeInformation.OSArchitecture + ", limit " + limitMs + " ms");
                 if (shownMs > limitMs) throw new Exception("window took " + shownMs + " ms to appear (limit " + limitMs + ")");
                 if (workingSetMb > 200) throw new Exception("working set " + workingSetMb + " MB (limit 200)");
                 Pump();
