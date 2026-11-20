@@ -107,10 +107,22 @@ namespace Optimizzzer.Tests
         /// <summary>The next powercfg call whose arguments contain this text fails.</summary>
         public string FailNext { get; set; }
 
+        /// <summary>Simulated state of the Virtual Machine Platform optional feature.</summary>
+        public bool VmpEnabled { get; set; } = true;
+
+        /// <summary>Power plan settings written with /setacvalueindex, by "subgroup/setting".</summary>
+        public Dictionary<string, int> PowerValues { get; } = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
         public ProcessResult Run(string file, string arguments, int timeoutMs = 120000)
         {
             Calls.Add(file + " " + arguments);
             if (FailNext != null && arguments.Contains(FailNext)) { FailNext = null; return new ProcessResult(1, "", "denied"); }
+            if (file == "dism.exe" && arguments.Contains("VirtualMachinePlatform"))
+            {
+                if (arguments.Contains("/get-featureinfo")) return new ProcessResult(0, "State : " + (VmpEnabled ? "Enabled" : "Disabled"), "");
+                if (arguments.Contains("/disable-feature")) { VmpEnabled = false; return new ProcessResult(3010, "", ""); }
+                if (arguments.Contains("/enable-feature")) { VmpEnabled = true; return new ProcessResult(3010, "", ""); }
+            }
             if (file != "powercfg") return new ProcessResult(0, "", "");
             var a = arguments.Split(' ');
             switch (a[0].ToLowerInvariant())
@@ -118,7 +130,16 @@ namespace Optimizzzer.Tests
                 case "/getactivescheme": return new ProcessResult(0, "Power Scheme GUID: " + ActiveScheme + "  (Balanced)", "");
                 case "/list": return new ProcessResult(0, string.Join("\n", Schemes), "");
                 case "-duplicatescheme": Schemes.Add(a[2]); return new ProcessResult(0, "", "");
-                case "/setactive": ActiveScheme = a[1]; return new ProcessResult(0, "", "");
+                case "/setactive": if (a[1] != "SCHEME_CURRENT") ActiveScheme = a[1]; return new ProcessResult(0, "", "");
+                case "/query":
+                    if (a.Length >= 4)
+                    {
+                        var key = a[2] + "/" + a[3];
+                        var v = PowerValues.TryGetValue(key, out var x) ? x : 1;
+                        return new ProcessResult(0, "Power Setting Index\n  Current AC Power Setting Index: 0x" + v.ToString("x8") + "\n  Current DC Power Setting Index: 0x00000001", "");
+                    }
+                    return new ProcessResult(0, "", "");
+                case "/setacvalueindex": PowerValues[a[2] + "/" + a[3]] = int.Parse(a[4]); return new ProcessResult(0, "", "");
                 case "/delete":
                     // Like Windows: the active plan cannot be deleted.
                     if (string.Equals(a[1], ActiveScheme, StringComparison.OrdinalIgnoreCase)) return new ProcessResult(1, "", "active");
@@ -179,6 +200,7 @@ namespace Optimizzzer.Tests
         public FakeAppx Appx { get; } = new FakeAppx();
         public FakeRestorePoint RestorePoint { get; } = new FakeRestorePoint();
         public FakeInfo Info { get; } = new FakeInfo();
+        public FakeSpi Spi { get; } = new FakeSpi();
         public SystemContext Context { get; }
 
         public FakeSystem()
@@ -187,7 +209,7 @@ namespace Optimizzzer.Tests
             Context = new SystemContext
             {
                 Registry = Registry, Services = Services, Tasks = Tasks, Process = Process,
-                Appx = Appx, RestorePoint = RestorePoint, Info = Info,
+                Appx = Appx, RestorePoint = RestorePoint, Info = Info, Spi = Spi,
             };
         }
 
@@ -208,6 +230,26 @@ namespace Optimizzzer.Tests
             return this;
         }
 
-        public string Dump() => Registry.Dump() + "\n#svc " + Services.Dump() + "\n#task " + Tasks.Dump() + "\n#power " + Process.ActiveScheme + " " + string.Join(",", Process.Schemes.OrderBy(s => s));
+        public string Dump() => Registry.Dump() + "\n#svc " + Services.Dump() + "\n#task " + Tasks.Dump() + "\n#power " + Process.ActiveScheme + " " + string.Join(",", Process.Schemes.OrderBy(s => s))
+            + "\n#pwr " + string.Join(",", Process.PowerValues.Where(v => v.Value != 1).OrderBy(v => v.Key).Select(v => v.Key + "=" + v.Value))
+            + "\n#spi " + string.Join(",", Spi.Values.OrderBy(v => v.Key).Select(v => v.Key + "=" + v.Value)) + "\n#vmp " + Process.VmpEnabled;
+    }
+
+    /// <summary>SystemParametersInfo in memory, with Windows' default values.</summary>
+    public sealed class FakeSpi : ISystemParameters
+    {
+        public readonly Dictionary<uint, int> Values = new Dictionary<uint, int>
+        {
+            [Spi.GetKeyboardDelay] = 1, [Spi.GetKeyboardSpeed] = 31, [Spi.GetMouseSpeed] = 10, [Spi.GetMouseHoverTime] = 400,
+            [Spi.GetDragFullWindows] = 1, [Spi.GetMenuAnimation] = 1, [Spi.GetTooltipAnimation] = 1, [Spi.GetSelectionFade] = 1,
+            [Spi.GetDropShadow] = 1, [Spi.GetListBoxSmoothScrolling] = 1, [Spi.GetClientAreaAnimation] = 1, [Spi.GetComboBoxAnimation] = 1,
+        };
+        public int? Get(uint getAction) => Values.TryGetValue(getAction, out var v) ? v : (int?)null;
+        // In WinUser.h every Set code is its Get code + 1, except drag full windows (Set 0x25, Get 0x26).
+        public void Set(uint setAction, bool viaUiParam, int value)
+        {
+            uint get = setAction == Spi.SetDragFullWindows ? Spi.GetDragFullWindows : setAction - 1;
+            Values[get] = value;
+        }
     }
 }

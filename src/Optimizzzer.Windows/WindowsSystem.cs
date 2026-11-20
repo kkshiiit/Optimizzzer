@@ -54,6 +54,7 @@ namespace Optimizzzer.Windows
             {
                 Registry = Registry, Services = Services, Tasks = Tasks, Process = Process, Appx = Appx,
                 RestorePoint = new WinRestorePoint(Registry, Process), Info = Info,
+                Spi = new WinSystemParameters(),
             };
         }
 

@@ -99,6 +99,8 @@ namespace Optimizzzer.App.Shell
                 case Category.WindowsAI: return WindowsAI;
                 case Category.Performance: return Performance;
                 case Category.Gaming: return Gaming;
+                case Category.Input: return Keyboard;
+                case Category.Visual: return Theme;
                 case Category.Power: return Power;
                 case Category.Interface: return Interface;
                 case Category.Update: return Update;
@@ -133,6 +135,8 @@ namespace Optimizzzer.App.Shell
                 case Category.WindowsAI: return Loc.S("IA y widgets", "AI and widgets");
                 case Category.Performance: return Loc.S("Rendimiento", "Performance");
                 case Category.Gaming: return Loc.S("Juegos", "Gaming");
+                case Category.Input: return Loc.S("Teclado y ratón", "Keyboard and mouse");
+                case Category.Visual: return Loc.S("Efectos visuales", "Visual effects");
                 case Category.Power: return Loc.S("Energía", "Power");
                 case Category.Interface: return Loc.S("Interfaz y Explorador", "Interface and Explorer");
                 case Category.Update: return Loc.S("Windows Update", "Windows Update");

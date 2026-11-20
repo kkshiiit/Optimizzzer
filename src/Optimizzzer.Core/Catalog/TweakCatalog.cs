@@ -34,6 +34,12 @@ namespace Optimizzzer.Core.Catalog
             ["gaming.gameDvr"] = Impact.High,
             ["gaming.gameMode"] = Impact.Medium,
             ["gaming.mouseAccel"] = Impact.High,
+            ["input.pointerSpeed"] = Impact.Medium,
+            ["visual.dragContents"] = Impact.Medium,
+            ["visual.menuFades"] = Impact.Medium,
+            ["power.usbSuspend"] = Impact.Medium,
+            ["security.memoryIntegrity"] = Impact.High,
+            ["security.vmPlatform"] = Impact.Medium,
             ["gaming.windowedOptimizations"] = Impact.Medium,
             ["gaming.hags"] = Impact.Medium,
             ["power.ultimate"] = Impact.Medium,
@@ -53,6 +59,7 @@ namespace Optimizzzer.Core.Catalog
             InterfaceTweaks.Add(l);
             PerformanceTweaks.Add(l);
             SystemTweaks.Add(l);
+            InputVisualTweaks.Add(l);
             foreach (var t in l)
                 if (ImpactOf.TryGetValue(t.Id, out var impact)) t.Impact = impact;
                 else if (t.Category == Category.Apps) t.Impact = Impact.Low;

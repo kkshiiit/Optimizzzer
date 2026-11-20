@@ -425,7 +425,56 @@ namespace Optimizzzer.App.Pages
                 rb.Checked += (_, __) => { _tab = tab; W.RefreshCurrentIf(this); };
                 tabs.Children.Add(rb);
             }
+            if (_tab == Tab.Games && S.Ctx?.Info.Gpus.Count >= 2) return Ui.Stack(12, tabs, GpuCard());
             return tabs;
+        }
+
+        /// <summary>
+        /// PCs with two graphics cards (integrated + dedicated): pin every detected game to the powerful one.
+        /// Each game becomes an undoable change in History.
+        /// </summary>
+        private FrameworkElement GpuCard()
+        {
+            var games = Items.Where(e => e.Program != null && e.Program.IsGame).Select(e => (e.Program, Exe: MainExe(e.Program))).Where(x => x.Exe != null).ToList();
+            var text = Loc.S("Tu equipo tiene dos gráficas (", "Your PC has two graphics cards (") + string.Join(" y ", S.Ctx.Info.Gpus) + Loc.S("). Windows a veces abre los juegos con la integrada, que rinde mucho menos.", "). Windows sometimes opens games on the integrated one, which is much slower.")
+                + (games.Count == 0 ? Loc.S(" No se encontró el ejecutable de ningún juego.", " No game executable was found.") : "");
+            var go = Ui.Primary(Loc.S("Usar la gráfica potente en ", "Use the powerful card in ") + games.Count + Loc.S(" juegos", " games"), async () =>
+            {
+                try
+                {
+                    await S.EnsureReadyAsync();
+                    var tweaks = games.Select(g => ManualTweaks.GpuPreference(g.Exe, g.Program.Name)).ToList();
+                    var session = await Task.Run(() => S.Engine.Apply(tweaks, new ApplyOptions { CreateRestorePoint = false }));
+                    var bad = session.Entries.Count(x => x.ResultKind == EntryResult.Failed);
+                    if (bad == 0) W.Toast(ToastKind.Success, games.Count + Loc.S(" juegos usarán la gráfica potente. Se deshace desde Historial.", " games will use the powerful card. Undo it from History."));
+                    else W.ShowError(bad + Loc.S(" juegos no se pudieron cambiar.", " games could not be changed."));
+                }
+                catch (Exception ex) { W.ShowError(ex.Message); }
+            }, Icons.Gaming);
+            go.IsEnabled = games.Count > 0;
+            var g2 = new Grid();
+            g2.ColumnDefinitions.Add(new ColumnDefinition());
+            g2.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            g2.Children.Add(Ui.Notice(Icons.Info, "AccentText", text));
+            go.Margin = new Thickness(16, 0, 0, 0); go.VerticalAlignment = VerticalAlignment.Center;
+            Grid.SetColumn(go, 1); g2.Children.Add(go);
+            return Ui.Panel(g2, 16);
+        }
+
+        /// <summary>The game's main exe: the largest one in its folder (one level deep), skipping installers and crash reporters.</summary>
+        private static string MainExe(InstalledProgram p)
+        {
+            try
+            {
+                var dir = (p.InstallLocation ?? "").Trim().Trim('"');
+                if (dir.Length == 0 || !System.IO.Directory.Exists(dir)) return null;
+                var skip = new System.Text.RegularExpressions.Regex(@"unins|setup|install|crash|report|update|launcher|redist|vc_|dxsetup|helper|cef|easyanticheat|battleye", System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+                var files = System.IO.Directory.GetFiles(dir, "*.exe", System.IO.SearchOption.TopDirectoryOnly).ToList();
+                foreach (var sub in System.IO.Directory.GetDirectories(dir).Take(30))
+                    try { files.AddRange(System.IO.Directory.GetFiles(sub, "*.exe", System.IO.SearchOption.TopDirectoryOnly)); } catch (Exception) { }
+                return files.Where(f => !skip.IsMatch(System.IO.Path.GetFileName(f))).OrderByDescending(f => new System.IO.FileInfo(f).Length).FirstOrDefault();
+            }
+            catch (Exception) { return null; }
         }
 
         protected override FrameworkElement Toolbar()

@@ -13,6 +13,27 @@ namespace Optimizzzer.Core
     {
         public const string ServicePrefix = "manual.service|";
         public const string TaskPrefix = "manual.task|";
+        public const string GpuPrefix = "manual.gpu|";
+
+        /// <summary>
+        /// Runs one game on the high-performance graphics card (Settings > Display > Graphics). Only useful on PCs
+        /// with two GPUs (for example integrated plus dedicated). Undo restores the previous choice.
+        /// </summary>
+        public static Tweak GpuPreference(string exePath, string gameName)
+        {
+            var t = new Tweak
+            {
+                Id = GpuPrefix + exePath,
+                Category = Category.Gaming,
+                Risk = Risk.Safe,
+                Title = new Text((gameName ?? exePath) + ": gráfica de alto rendimiento", (gameName ?? exePath) + ": high-performance graphics"),
+                Summary = new Text("El juego usa la gráfica potente en lugar de la integrada.", "The game uses the powerful graphics card instead of the integrated one."),
+                Why = new Text("En equipos con dos gráficas, Windows a veces elige la integrada y el juego rinde mucho menos.", "On PCs with two graphics cards, Windows sometimes picks the integrated one and the game runs much slower."),
+                Source = "Microsoft: Configuración > Pantalla > Gráficos (UserGpuPreferences)",
+            };
+            t.Actions.Add(new RegistryValueAction(Hive.CurrentUser, @"Software\Microsoft\DirectX\UserGpuPreferences", exePath, RegValue.Str("GpuPreference=2;")));
+            return t;
+        }
 
         public static Tweak Service(string name, string displayName, StartMode mode)
         {
@@ -58,6 +79,7 @@ namespace Optimizzzer.Core
         public static Tweak FromId(string id)
         {
             if (id == null) return null;
+            if (id.StartsWith(GpuPrefix, StringComparison.Ordinal)) return GpuPreference(id.Substring(GpuPrefix.Length), null);
             var parts = id.Split('|');
             if (id.StartsWith(ServicePrefix, StringComparison.Ordinal) && parts.Length == 3
                 && Enum.TryParse<StartMode>(parts[2], out var mode))

@@ -43,6 +43,7 @@ namespace Optimizzzer.Core
                 {
                     "privacy.telemetry", "privacy.diagtrack", "privacy.telemetryTasks", "privacy.advertisingId", "privacy.tailored",
                     "privacy.activityHistory", "privacy.feedback", "privacy.settingsSuggestions", "privacy.webSearch", "privacy.cortana",
+                    "input.filterToggleKeys", "input.accessShortcuts",
                     "ai.copilot", "ai.recall", "ui.widgets", "ui.silentApps", "ui.tips", "ui.lockScreenAds", "ui.startRecommendations",
                     "ui.syncProviderAds", "ui.fileExtensions", "svc.retailDemo", "update.deliveryOptimization", "perf.edgeBackground",
                 },
@@ -59,6 +60,8 @@ namespace Optimizzzer.Core
                 Duration = new Text("1 a 3 minutos", "1 to 3 minutes"),
                 Adds = new[]
                 {
+                    "visual.dragContents", "visual.selectionRect", "visual.menuFades", "visual.shadows", "visual.smoothScroll", "visual.controlAnimations", "visual.taskbarThumbs",
+                    "input.hoverTime", "explorer.classicMenu", "explorer.openThisPC", "privacy.recentItems",
                     "perf.menuDelay", "perf.startupDelay", "perf.animations", "perf.storageSense", "gaming.gameDvr", "update.noAutoRestart",
                     "svc.maps", "svc.fax", "svc.wmpNetwork", "ui.endTask", "ui.chatIcon", "ui.meetNow",
                     "app.bingNews", "app.bingSearch", "app.tips", "app.feedbackHub", "app.mixedReality", "app.3dViewer",
@@ -77,6 +80,7 @@ namespace Optimizzzer.Core
                 Duration = new Text("1 a 3 minutos y reinicio", "1 to 3 minutes plus a restart"),
                 Adds = new[]
                 {
+                    "input.keyRepeat", "input.pointerSpeed", "gaming.controllerGameBar", "power.usbSuspend", "power.pcieAspm",
                     "gaming.gameMode", "gaming.gameBarTips", "gaming.mouseAccel", "gaming.windowedOptimizations", "gaming.hags",
                     "ui.stickyKeys", "perf.transparency",
                 },
