@@ -42,6 +42,24 @@ namespace Optimizzzer.Windows
         [return: MarshalAs(UnmanagedType.Bool)]
         private static extern bool SRSetRestorePointW(ref RESTOREPOINTINFOW pRestorePtSpec, out STATEMGRSTATUS pSMgrStatus);
 
+        /// <summary>When the newest restore point was made, or null if there is none (or System Restore is off).</summary>
+        public static DateTime? LastCreated()
+        {
+            try
+            {
+                DateTime? newest = null;
+                using (var searcher = new ManagementObjectSearcher(@"root\default", "SELECT CreationTime FROM SystemRestore"))
+                    foreach (ManagementObject o in searcher.Get())
+                        using (o)
+                        {
+                            var t = ManagementDateTimeConverter.ToDateTime(Convert.ToString(o["CreationTime"]));
+                            if (newest == null || t > newest) newest = t;
+                        }
+                return newest;
+            }
+            catch (Exception) { return null; }
+        }
+
         public string Create(string description)
         {
             var drive = Path.GetPathRoot(Environment.SystemDirectory);

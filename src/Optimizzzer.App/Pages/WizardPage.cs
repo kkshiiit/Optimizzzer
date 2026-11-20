@@ -722,7 +722,7 @@ namespace Optimizzzer.App.Pages
             FrameworkElement measures = null;
             if (S.Before != null && S.After != null)
             {
-                var rows = MeasurementCompare.Compare(S.Before, S.After).Where(d => d.Before.HasValue || d.After.HasValue).ToList();
+                var rows = MeasurementCompare.CompareAll(S.Before, S.After).Where(d => d.Before.HasValue || d.After.HasValue).ToList();
                 var g = new Grid();
                 // Proportional columns so the table fits any width.
                 g.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(2, GridUnitType.Star), MaxWidth = 300 });

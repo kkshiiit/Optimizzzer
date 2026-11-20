@@ -20,6 +20,16 @@ namespace Optimizzzer.App.Pages
         private Action<double, string> _progress;
         private IList<Tweak> _drift;
         private JournalSession _last;
+        private Health _health;
+
+        /// <summary>Facts read from this PC for the health card. Null fields could not be read and are not shown.</summary>
+        private sealed class Health
+        {
+            public long? FreeBytes, TotalBytes;
+            public double? UptimeDays;
+            public DateTime? LastRestorePoint;
+            public long? TempBytes;
+        }
 
         public HomePage(AppState s, MainWindow w) : base(s, w)
         {
@@ -37,6 +47,93 @@ namespace Optimizzzer.App.Pages
             else if (S.ScanResults != null) _ = LoadExtrasAsync();
         }
 
+        private static Health ReadHealth()
+        {
+            var h = new Health();
+            try
+            {
+                var d = new System.IO.DriveInfo(System.IO.Path.GetPathRoot(Environment.SystemDirectory));
+                h.FreeBytes = d.AvailableFreeSpace; h.TotalBytes = d.TotalSize;
+            }
+            catch (Exception) { }
+            try { h.UptimeDays = Optimizzzer.Windows.Native.GetTickCount64() / 86400000.0; } catch (Exception) { }
+            h.LastRestorePoint = Optimizzzer.Windows.WinRestorePoint.LastCreated();
+            try
+            {
+                long t = 0;
+                foreach (var f in new System.IO.DirectoryInfo(System.IO.Path.GetTempPath()).EnumerateFiles("*", System.IO.SearchOption.AllDirectories)) { try { t += f.Length; } catch (Exception) { } }
+                h.TempBytes = t;
+            }
+            catch (Exception) { }
+            return h;
+        }
+
+        /// <summary>The health card: measured facts, each with what to do when it needs attention.</summary>
+        private FrameworkElement HealthCard()
+        {
+            var h = _health;
+            var rows = new StackPanel();
+            void Line(string icon, string brush, string text, string action = null, Action onAction = null)
+            {
+                var g = new Grid { Margin = new Thickness(0, 4, 0, 4) };
+                g.ColumnDefinitions.Add(new ColumnDefinition());
+                g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+                var n = Ui.Notice(icon, brush, text);
+                n.VerticalAlignment = VerticalAlignment.Center;
+                g.Children.Add(n);
+                if (action != null)
+                {
+                    var b = Ui.Subtle(action, onAction);
+                    b.SetResourceReference(Control.ForegroundProperty, "AccentText");
+                    Grid.SetColumn(b, 1);
+                    g.Children.Add(b);
+                }
+                rows.Children.Add(g);
+            }
+            if (h == null)
+            {
+                rows.Children.Add(Ui.Muted(Loc.S("Leyendo…", "Reading…"), 12));
+            }
+            else
+            {
+                if (h.FreeBytes.HasValue && h.TotalBytes > 0)
+                {
+                    double pct = h.FreeBytes.Value * 100.0 / h.TotalBytes.Value;
+                    bool low = pct < 10 || h.FreeBytes < 15L * 1024 * 1024 * 1024;
+                    Line(low ? Icons.Warning : Icons.CheckCircle, low ? "Moderate" : "Success",
+                        Loc.S("Espacio libre en el disco del sistema: ", "Free space on the system drive: ") + Loc.Size(h.FreeBytes.Value) + " (" + Loc.N(pct, "N0") + " %)"
+                        + (low ? Loc.S(". Poco espacio vuelve lento a Windows.", ". Low space slows Windows down.") : "."),
+                        low ? Loc.S("Liberar espacio", "Free up space") : null, () => W.Navigate("cleanup"));
+                }
+                if (h.UptimeDays.HasValue)
+                {
+                    bool longUp = h.UptimeDays > 7;
+                    Line(longUp ? Icons.Warning : Icons.CheckCircle, longUp ? "Moderate" : "Success",
+                        Loc.S("Sin reiniciar desde hace ", "Not restarted for ") + (h.UptimeDays < 1 ? Loc.S("menos de un día", "less than a day") : Loc.N(Math.Floor(h.UptimeDays.Value), "N0") + Loc.S(" días", " days"))
+                        + (longUp ? Loc.S(". Reiniciar aplica actualizaciones y libera memoria. El apagado normal con Inicio rápido no cuenta como reinicio.", ". Restarting applies updates and frees memory. A normal shutdown with Fast Startup does not count as a restart.") : "."));
+                }
+                if (h.LastRestorePoint.HasValue)
+                {
+                    var days = (DateTime.Now - h.LastRestorePoint.Value).TotalDays;
+                    Line(days > 30 ? Icons.Warning : Icons.Shield, days > 30 ? "Moderate" : "Success",
+                        Loc.S("Último punto de restauración: ", "Last restore point: ") + h.LastRestorePoint.Value.ToString("d")
+                        + (days > 30 ? Loc.S(". Tiene más de un mes; se crea uno nuevo al aplicar cualquier nivel.", ". It is over a month old; a new one is created when you apply any level.") : "."));
+                }
+                else
+                    Line(Icons.Warning, "Moderate", Loc.S("No hay puntos de restauración, o Restaurar sistema está desactivado. Optimizzzer intenta crear uno antes de cada cambio.",
+                        "There are no restore points, or System Restore is off. Optimizzzer tries to create one before every change."));
+                if (h.TempBytes.HasValue && h.TempBytes > 1024L * 1024 * 1024)
+                    Line(Icons.Info, "FgMuted", Loc.S("Archivos temporales: ", "Temporary files: ") + Loc.Size(h.TempBytes.Value) + ".", Loc.S("Limpiar", "Clean up"), () => W.Navigate("cleanup"));
+                if (_drift != null && _drift.Count > 0)
+                    Line(Icons.Drift, "Moderate", _drift.Count + Loc.S(" ajustes revertidos por Windows.", " tweaks reverted by Windows."), Loc.S("Revisar", "Review"), () => W.Navigate("drift"));
+                else
+                    Line(Icons.CheckCircle, "Success", Loc.S("Ningún ajuste fue revertido por Windows.", "No tweak was reverted by Windows."));
+            }
+            var panel = Ui.Panel(Ui.Stack(8, Ui.H2(Loc.S("Salud del equipo", "PC health")), rows), 20);
+            panel.Margin = new Thickness(0, 0, 0, 8);
+            return panel;
+        }
+
         /// <summary>Last session and drift, read in the background after the scan.</summary>
         private async Task LoadExtrasAsync()
         {
@@ -44,14 +141,14 @@ namespace Optimizzzer.App.Pages
             try
             {
                 var catalog = S.UndoCatalog();
-                var (last, drift) = await Task.Run(() =>
+                var (last, drift, health) = await Task.Run(() =>
                 {
                     var l = S.Win.Journal.LoadAll().Where(x => x.Entries.Any(e => e.ResultKind == EntryResult.Applied && !e.Reverted
                         && (catalog.FirstOrDefault(t => t.Id == e.TweakId)?.Reversible ?? true))).LastOrDefault();
-                    return (l, S.Engine.FindDrift(catalog));
+                    return (l, S.Engine.FindDrift(catalog), ReadHealth());
                 });
-                bool changed = (last?.Id != _last?.Id) || (drift.Count != (_drift?.Count ?? 0));
-                _last = last; _drift = drift;
+                bool changed = (last?.Id != _last?.Id) || (drift.Count != (_drift?.Count ?? 0)) || _health == null;
+                _last = last; _drift = drift; _health = health;
                 if (changed) W.RefreshCurrentIf(this);
             }
             catch (Exception) { }
@@ -76,10 +173,7 @@ namespace Optimizzzer.App.Pages
             var body = new StackPanel();
 
             // Notices first: they need attention before anything else.
-            if (_drift != null && _drift.Count > 0)
-                body.Children.Add(NoticeBar(Icons.Drift, "Moderate",
-                    _drift.Count + Loc.S(" ajustes que aplicaste fueron revertidos por Windows.", " tweaks you applied were reverted by Windows."),
-                    Loc.S("Revisar", "Review"), () => W.Navigate("drift")));
+            // Reverted tweaks are shown in the health card below, with a Review button.
             if (_last != null)
             {
                 int n = _last.Entries.Count(e => e.ResultKind == EntryResult.Applied && !e.Reverted);
@@ -87,6 +181,8 @@ namespace Optimizzzer.App.Pages
                     Loc.S("Última optimización: ", "Last optimization: ") + _last.Started.ToLocalTime().ToString("g") + " · " + n + Loc.S(" cambios activos", " active changes"),
                     Loc.S("Deshacer", "Undo"), UndoLast));
             }
+
+            body.Children.Add(HealthCard());
 
             var heading = Ui.H2(Loc.S("Elige un nivel", "Pick a level"));
             heading.Margin = new Thickness(0, body.Children.Count > 0 ? 12 : 0, 0, 4);

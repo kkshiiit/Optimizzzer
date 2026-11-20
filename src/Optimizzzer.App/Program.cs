@@ -389,6 +389,14 @@ namespace Optimizzzer.App
             }
 
             var win = new WindowsSystem();
+            if (o.Measure != null)
+            {
+                win.Measurements.Add(win.Measurer.Take(o.Measure));
+                // The "after restart" measurement runs once: remove its task so it never repeats.
+                if (o.Measure == MeasureAfterRestart.Label) MeasureAfterRestart.Cancel(win.Process);
+                Console.WriteLine(Loc.S("Medición guardada.", "Measurement saved."));
+                return 0;
+            }
             if (!WindowsSystem.IsAdministrator() && (o.Silent || o.Undo != null))
             {
                 Console.WriteLine(Loc.S("Se necesitan permisos de administrador.", "Administrator rights are required."));

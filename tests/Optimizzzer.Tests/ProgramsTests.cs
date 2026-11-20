@@ -113,3 +113,33 @@ namespace Optimizzzer.Tests
         }
     }
 }
+
+namespace Optimizzzer.Tests
+{
+    public class MeasurementV12Tests
+    {
+        [Fact]
+        public void Csv_has_a_header_and_one_row_per_measurement()
+        {
+            var a = new Measurement { TakenUtc = "2026-11-20T10:00:00.0000000Z", Label = "before", BootMs = 35200, CpuPercent = 12.5, MemoryUsedMb = 7424 };
+            var b = new Measurement { TakenUtc = "2026-11-21T10:00:00.0000000Z", Label = "after, reboot", BootMs = 30100 };
+            var csv = MeasurementCompare.ToCsv(new[] { a, b }, Optimizzzer.Core.Lang.En).Split(new[] { "\r\n" }, StringSplitOptions.RemoveEmptyEntries);
+            Assert.Equal(3, csv.Length);
+            Assert.StartsWith("Date,Label,Last boot duration (s)", csv[0]);
+            Assert.Contains(",35.2,", csv[1]);
+            Assert.Contains("12.5", csv[1]);
+            Assert.Contains("\"after, reboot\"", csv[2]);
+        }
+
+        [Fact]
+        public void Every_metric_reads_its_own_field()
+        {
+            var m = new Measurement { ShutdownMs = 4000, Threads = 3000, Handles = 90000, CommittedMb = 9000, TempFolderMb = 120 };
+            var all = MeasurementCompare.CompareAll(null, m);
+            Assert.Equal(MeasurementCompare.Metrics.Count, all.Count);
+            Assert.Equal(4.0, all.First(d => d.Name.En.StartsWith("Last shutdown")).After);
+            Assert.Equal(3000, all.First(d => d.Name.En == "Threads").After);
+            Assert.False(all.First(d => d.Name.En.StartsWith("Free space")).LowerIsBetter);
+        }
+    }
+}

@@ -14,7 +14,7 @@ namespace Optimizzzer.Core
     /// </summary>
     public sealed class CliOptions
     {
-        public bool HasCommand => Scan || DryRun || Silent || Profile.HasValue || Level.HasValue || ApplyFile != null || Apply.Count > 0 || Undo != null || List || SelfTest || Help;
+        public bool HasCommand => Scan || DryRun || Silent || Profile.HasValue || Level.HasValue || ApplyFile != null || Apply.Count > 0 || Undo != null || List || SelfTest || Help || Measure != null;
         public Level? Level { get; private set; }
         public string ApplyFile { get; private set; }
         public bool Scan { get; private set; }
@@ -27,6 +27,8 @@ namespace Optimizzzer.Core
         public ProfileKind? Profile { get; private set; }
         public List<string> Apply { get; } = new List<string>();
         public string Undo { get; private set; }
+        /// <summary>Take one measurement with this label and exit (used by the one-time "after restart" task).</summary>
+        public string Measure { get; private set; }
         public string ReportPath { get; private set; }
         public Lang? Lang { get; private set; }
         public List<string> Errors { get; } = new List<string>();
@@ -72,6 +74,7 @@ namespace Optimizzzer.Core
                         if (ids != null) o.Apply.AddRange(ids.Split(new[] { ',', ';' }, StringSplitOptions.RemoveEmptyEntries).Select(s => s.Trim()));
                         break;
                     case "undo": o.Undo = Next(); break;
+                    case "measure": o.Measure = Next(); break;
                     case "report": o.ReportPath = Next(); break;
                     case "lang":
                         var l = Next();
@@ -102,6 +105,7 @@ namespace Optimizzzer.Core
   -NoRestorePoint         Skip the restore point (not recommended)
   -Undo <all|session|id>  Undo everything, one session, or one tweak
   -Report <file.html>     Write an HTML report of the run
+  -Measure <label>        Save one measurement of this PC with that label, then exit
   -Lang <es|en>           Output language
   -SelfTest               Load every screen and the catalog, then exit (CI)";
     }
