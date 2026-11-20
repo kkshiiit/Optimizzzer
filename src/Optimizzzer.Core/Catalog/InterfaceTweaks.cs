@@ -89,8 +89,8 @@ namespace Optimizzzer.Core.Catalog
                 .Source("Microsoft Learn: Policy CSP NewsAndInterests/AllowNewsAndInterests")
                 .Profiles(P.Minimal | P.Office | P.Gaming | P.Laptop | P.Privacy)
                 .Restart(RestartKind.Explorer)
-                .Dword(LM, @"SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests", 0)
-                .Dword(LM, @"SOFTWARE\Policies\Microsoft\Windows\Windows Feeds", "EnableFeeds", 0);
+                .Action(new OsOnlyAction(OsFilter.Win11, new RegistryValueAction(LM, @"SOFTWARE\Policies\Microsoft\Dsh", "AllowNewsAndInterests", RegValue.DWord(0))))
+                .Action(new OsOnlyAction(OsFilter.Win10, new RegistryValueAction(LM, @"SOFTWARE\Policies\Microsoft\Windows\Windows Feeds", "EnableFeeds", RegValue.DWord(0))));
         }
 
         private static void AddAds(List<Tweak> l)

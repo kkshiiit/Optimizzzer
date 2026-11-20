@@ -13,6 +13,9 @@ namespace Optimizzzer.Tests
             new Dictionary<string, Dictionary<string, RegValue>>(StringComparer.OrdinalIgnoreCase);
 
         public Func<Hive, string, string, bool> FailOnSet { get; set; }
+        /// <summary>Keys (prefix) that behave like Windows' protected policy keys.</summary>
+        public HashSet<string> Protected { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public bool CanWrite(Hive hive, string path) => !Protected.Any(p => path.StartsWith(p, StringComparison.OrdinalIgnoreCase));
 
         private static string K(Hive h, string p) => h + "\\" + p.TrimEnd('\\');
 

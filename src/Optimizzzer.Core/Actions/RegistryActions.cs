@@ -99,8 +99,10 @@ namespace Optimizzzer.Core
         public override ActionState Detect(SystemContext ctx)
         {
             var current = ctx.Registry.GetValue(Hive, Path, Name);
-            if (Value == null) return current == null ? ActionState.Applied : ActionState.NotApplied;
-            return Value.Equals(current) ? ActionState.Applied : ActionState.NotApplied;
+            bool applied = Value == null ? current == null : Value.Equals(current);
+            if (applied) return ActionState.Applied;
+            // Windows protects some policy keys even from administrators: never offer a change that cannot be made.
+            return ctx.Registry.CanWrite(Hive, Path) ? ActionState.NotApplied : ActionState.NotApplicable;
         }
 
         public override ActionSnapshot Snapshot(SystemContext ctx)

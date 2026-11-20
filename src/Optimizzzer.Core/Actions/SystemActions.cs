@@ -113,6 +113,22 @@ namespace Optimizzzer.Core
             (lang == Lang.En ? "Uninstall app " : "Desinstalar app ") + PackageName;
     }
 
+    /// <summary>An action that only exists on Windows 10 or only on Windows 11; on the other one it does not apply.</summary>
+    public sealed class OsOnlyAction : TweakAction
+    {
+        public OsOnlyAction(OsFilter os, TweakAction inner) { Os = os; Inner = inner; }
+        public OsFilter Os { get; }
+        public TweakAction Inner { get; }
+        private bool Matches(SystemContext c) => c.Info == null || (Os & (c.Info.IsWin11 ? OsFilter.Win11 : OsFilter.Win10)) != 0;
+        public override bool Reversible => Inner.Reversible;
+        public override ActionState Detect(SystemContext ctx) => Matches(ctx) ? Inner.Detect(ctx) : ActionState.NotApplicable;
+        public override ActionSnapshot Snapshot(SystemContext ctx) => Inner.Snapshot(ctx);
+        public override void Apply(SystemContext ctx) => Inner.Apply(ctx);
+        public override void Revert(SystemContext ctx, ActionSnapshot s) => Inner.Revert(ctx, s);
+        // Same text as the inner action, so undo still matches journals written by v1.0.x.
+        public override string Describe(Lang lang) => Inner.Describe(lang);
+    }
+
     /// <summary>For changes that are not plain registry, service or task edits (powercfg, bcdedit, ...).</summary>
     public sealed class CustomAction : TweakAction
     {

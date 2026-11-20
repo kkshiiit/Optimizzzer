@@ -248,3 +248,21 @@ namespace Optimizzzer.Tests
         }
     }
 }
+
+namespace Optimizzzer.Tests
+{
+    public class ProtectedKeyTests
+    {
+        [Xunit.Fact]
+        public void A_tweak_on_a_protected_key_is_not_offered()
+        {
+            var sys = new FakeSystem();
+            sys.Registry.Protected.Add(@"SOFTWARE\Policies\Microsoft\Dsh");
+            var engine = new Optimizzzer.Core.TweakEngine(sys.Context, new Optimizzzer.Core.MemoryJournalStore());
+            var widgets = Optimizzzer.Core.Catalog.TweakCatalog.Find("ui.widgets");
+            Xunit.Assert.Equal(Optimizzzer.Core.TweakStatus.NotApplicable, engine.Detect(widgets));
+            sys.Info.Build = 19045;
+            Xunit.Assert.Equal(Optimizzzer.Core.TweakStatus.NotApplied, engine.Detect(widgets));
+        }
+    }
+}

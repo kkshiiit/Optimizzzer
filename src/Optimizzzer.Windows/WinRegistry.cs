@@ -82,6 +82,34 @@ namespace Optimizzzer.Windows
             using (var root = Root(hive)) root.DeleteSubKeyTree(path, false);
         }
 
+        public bool CanWrite(Hive hive, string path)
+        {
+            try
+            {
+                using (var root = Root(hive))
+                {
+                    var p = path;
+                    while (true)
+                    {
+                        using (var k = root.OpenSubKey(p, false))
+                        {
+                            if (k != null)
+                            {
+                                // Opening for write checks the ACL without changing anything.
+                                using (root.OpenSubKey(p, true)) { }
+                                return true;
+                            }
+                        }
+                        int i = p.LastIndexOf('\\');
+                        if (i < 0) return true;
+                        p = p.Substring(0, i);
+                    }
+                }
+            }
+            catch (UnauthorizedAccessException) { return false; }
+            catch (System.Security.SecurityException) { return false; }
+        }
+
         public IList<string> GetValueNames(Hive hive, string path)
         {
             using (var k = Open(hive, path, false)) return k?.GetValueNames().ToList() ?? new List<string>();

@@ -19,6 +19,11 @@ namespace Optimizzzer.Core
         void DeleteKeyTree(Hive hive, string path);
         IList<string> GetValueNames(Hive hive, string path);
         IList<string> GetSubKeyNames(Hive hive, string path);
+        /// <summary>
+        /// False when the key (or, if it does not exist yet, its nearest existing parent) refuses writes even to an
+        /// administrator, as Windows does for some protected policy keys.
+        /// </summary>
+        bool CanWrite(Hive hive, string path);
     }
 
     public enum StartMode { Boot, System, Automatic, AutomaticDelayed, Manual, Disabled }
