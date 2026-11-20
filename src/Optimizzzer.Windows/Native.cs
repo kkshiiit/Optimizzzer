@@ -52,6 +52,9 @@ namespace Optimizzzer.Windows
         public const uint SHERB_NOCONFIRMATION = 0x1, SHERB_NOPROGRESSUI = 0x2, SHERB_NOSOUND = 0x4;
 
         [DllImport("kernel32.dll")]
+        public static extern ulong GetTickCount64();
+
+        [DllImport("kernel32.dll")]
         public static extern bool AttachConsole(int dwProcessId);
 
         [DllImport("kernel32.dll")]

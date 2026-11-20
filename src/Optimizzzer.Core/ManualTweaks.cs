@@ -47,6 +47,14 @@ namespace Optimizzzer.Core
             return t;
         }
 
+        /// <summary>"manual.service|Name" for "manual.service|Name|Mode": the thing being changed, without the new value.</summary>
+        public static string TargetOf(string id)
+        {
+            if (id == null || !(id.StartsWith(ServicePrefix, StringComparison.Ordinal) || id.StartsWith(TaskPrefix, StringComparison.Ordinal))) return null;
+            int i = id.LastIndexOf('|');
+            return i > 0 ? id.Substring(0, i).ToLowerInvariant() : null;
+        }
+
         public static Tweak FromId(string id)
         {
             if (id == null) return null;

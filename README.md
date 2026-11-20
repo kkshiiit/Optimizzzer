@@ -13,6 +13,22 @@ Las capturas se generan solas en un Windows de GitHub.
 
 ## Qué hace
 
+**Niveles en 1 clic (Inicio)**
+1. **Rápido:** lo básico y seguro en menos de un minuto (telemetría, anuncios, apps promocionadas).
+2. **Equilibrado:** un escritorio más ágil para el día a día y sin apps preinstaladas inútiles.
+3. **Juegos:** Game Mode, sin grabación continua, ratón sin aceleración y menos latencia en juegos en ventana.
+4. **Máximo rendimiento:** todo lo que tiene evidencia, aunque quite funciones como el indexador o la hibernación. Pide doble confirmación.
+
+Cada nivel incluye los anteriores. Al elegirlo ves en lenguaje simple qué va a pasar, qué ganas, qué pierdes y si hace falta reiniciar; solo se aplica al confirmar. No se prometen cifras de FPS: la ganancia depende del juego y del equipo, y se mide después.
+
+**También:**
+- **Buscador Ctrl+K:** encuentra cualquier página, nivel o ajuste.
+- **Avisos claros de éxito y error:** cada error dice qué hacer.
+- **Ayuda:** glosario y recorrido de bienvenida.
+- **Selecciones portátiles:** exporta e importa archivos `.optz` para repetir la configuración en otro PC.
+- **Apariencia:** tema claro/oscuro con 5 colores de acento.
+- **Modo ligero automático:** en equipos modestos se quitan las animaciones y las sombras para que vaya fluido.
+
 **Asistente paso a paso**
 1. Análisis: lee tu equipo y el estado real de cada ajuste. Solo lee.
 2. Perfil: Mínimo seguro, Trabajo y estudio, Juegos, Portátil y batería o Privacidad máxima. Te recomienda uno según tu hardware.
@@ -47,6 +63,9 @@ Windows SmartScreen avisará al abrirlo porque el exe no está firmado. Pulsa "M
 ```
 Optimizzzer.exe -Scan
 Optimizzzer.exe -List
+Optimizzzer.exe -Level Gaming -DryRun
+Optimizzzer.exe -Level Quick -Silent
+Optimizzzer.exe -ApplyFile mi-config.optz -Silent
 Optimizzzer.exe -Profile Gaming -DryRun
 Optimizzzer.exe -Profile Privacy -Silent -Report informe.html
 Optimizzzer.exe -Apply privacy.telemetry,ui.fileExtensions -Silent

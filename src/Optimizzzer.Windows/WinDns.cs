@@ -89,18 +89,38 @@ namespace Optimizzzer.Windows
             _proc.Run("ipconfig.exe", "/flushdns");
         }
 
+        /// <summary>
+        /// Puts back the DNS each adapter had before Optimizzzer changed it. Adapters are found by their Id, because
+        /// the name can change. A backup entry is deleted only once its adapter was restored, so nothing is lost.
+        /// </summary>
         public void Restore()
         {
             var backups = LoadBackup();
+            var remaining = new List<DnsBackup>();
+            var errors = new List<string>();
             foreach (var b in backups)
             {
-                if (b.Automatic) Run("interface " + "ipv4 set dnsservers name=\"" + b.AdapterName + "\" source=dhcp", false);
-                else SetServers(b.AdapterName, "ipv4", b.V4.ToArray(), throwOnError: false);
-                if (b.V6.Count == 0) Run("interface ipv6 set dnsservers name=\"" + b.AdapterName + "\" source=dhcp", false);
-                else SetServers(b.AdapterName, "ipv6", b.V6.ToArray(), throwOnError: false);
+                var name = NetworkInterface.GetAllNetworkInterfaces().FirstOrDefault(n => n.Id == b.AdapterId)?.Name ?? b.AdapterName;
+                try
+                {
+                    if (b.Automatic) Run("interface ipv4 set dnsservers name=\"" + name + "\" source=dhcp", true);
+                    else SetServers(name, "ipv4", b.V4.ToArray(), throwOnError: true);
+                    if (b.V6.Count == 0) Run("interface ipv6 set dnsservers name=\"" + name + "\" source=dhcp", false);
+                    else SetServers(name, "ipv6", b.V6.ToArray(), throwOnError: false);
+                }
+                catch (Exception ex)
+                {
+                    remaining.Add(b);
+                    errors.Add(name + ": " + ex.Message);
+                }
             }
             _proc.Run("ipconfig.exe", "/flushdns");
-            if (File.Exists(_backupPath)) File.Delete(_backupPath);
+            if (remaining.Count == 0) { if (File.Exists(_backupPath)) File.Delete(_backupPath); }
+            else
+            {
+                SaveBackup(remaining);
+                throw new InvalidOperationException("Could not restore the previous DNS for: " + string.Join("; ", errors));
+            }
         }
 
         private void SetServers(string adapter, string family, string[] servers, bool throwOnError = true)

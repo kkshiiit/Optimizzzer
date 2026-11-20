@@ -51,10 +51,13 @@ namespace Optimizzzer.App.Pages
                 return Frame(intro, Ui.Empty(Loc.S("Todavía no has aplicado ningún cambio con Optimizzzer.", "You have not applied any change with Optimizzzer yet.")));
 
             var body = new StackPanel();
+            // Read the journal once for the whole page, not once per row.
+            var undoCatalog = S.UndoCatalog();
             foreach (var s in visible)
             {
                 var entries = s.Entries.Where(e => e.ResultKind != EntryResult.Skipped).ToList();
-                bool anyOpen = entries.Any(e => e.ResultKind == EntryResult.Applied && !e.Reverted);
+                bool anyOpen = entries.Any(e => e.ResultKind == EntryResult.Applied && !e.Reverted
+                    && (undoCatalog.FirstOrDefault(x => x.Id == e.TweakId)?.Reversible ?? true));
                 var header = new Grid { Margin = new Thickness(0, 16, 0, 8) };
                 header.ColumnDefinitions.Add(new ColumnDefinition());
                 header.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
@@ -75,7 +78,7 @@ namespace Optimizzzer.App.Pages
 
                 foreach (var e in entries)
                 {
-                    var t = S.UndoCatalog().FirstOrDefault(x => x.Id == e.TweakId);
+                    var t = undoCatalog.FirstOrDefault(x => x.Id == e.TweakId);
                     var title = t != null ? Loc.S(t.Title) : e.TweakId;
                     string stateText; string brush; string icon;
                     if (e.ResultKind == EntryResult.Failed) { stateText = Loc.S("Falló y se revirtió: ", "Failed and rolled back: ") + e.Error; brush = "Advanced"; icon = Icons.Error; }
@@ -111,14 +114,15 @@ namespace Optimizzzer.App.Pages
             {
                 var r = await Task.Run(work);
                 if (r.Failed.Count > 0)
-                    W.ShowError(Loc.S("No se pudieron deshacer: ", "Could not undo: ") + string.Join(", ", r.Failed));
-                if (S.ScanResults != null)
-                    await Task.Run(() =>
-                    {
-                        for (int i = 0; i < S.ScanResults.Count; i++)
-                            S.ScanResults[i] = new ScanResult(S.ScanResults[i].Tweak, S.Engine.Detect(S.ScanResults[i].Tweak));
-                    });
-                foreach (var p in W.Pages.Where(p => p.Key == "wizard")) p.Invalidate();
+                    W.Toast(ToastKind.Error, Loc.S("No se pudieron deshacer ", "Could not undo ") + r.Failed.Count
+                        + Loc.S(". Siguen en la lista para reintentarlo.", ". They stay in the list so you can retry."), Loc.S("Ver cuáles", "See which"),
+                        () => W.ShowError(string.Join(", ", r.Failed)));
+                else if (r.Reverted.Count > 0)
+                    W.Toast(ToastKind.Success, r.Reverted.Count == 1 ? Loc.S("Cambio deshecho.", "Change undone.") : r.Reverted.Count + Loc.S(" cambios deshechos.", " changes undone."));
+                if (r.NotReversible.Count > 0)
+                    W.Toast(ToastKind.Info, r.NotReversible.Count + Loc.S(" desinstalaciones no se pueden deshacer desde aquí.", " uninstalls cannot be undone from here."));
+                await S.RescanAsync();
+                W.InvalidateScanViews();
             }
             catch (Exception ex) { W.ShowError(ex.Message); }
             _busy = false;
@@ -167,7 +171,16 @@ namespace Optimizzzer.App.Pages
             var apply = Ui.Primary(Loc.S("Aplicar de nuevo ", "Apply again ") + _drifted.Count, async () =>
             {
                 _busy = true; W.RefreshCurrentIf(this);
-                try { await Task.Run(() => S.Engine.Apply(_drifted, new ApplyOptions { CreateRestorePoint = false })); }
+                try
+                {
+                    var again = _drifted.ToList();
+                    var s = await Task.Run(() => S.Engine.Apply(again, new ApplyOptions { CreateRestorePoint = false }));
+                    await S.RescanAsync(again);
+                    W.InvalidateScanViews();
+                    int failed = s.Entries.Count(e => e.ResultKind == EntryResult.Failed);
+                    if (failed > 0) W.Toast(ToastKind.Error, failed + Loc.S(" no se pudieron aplicar de nuevo.", " could not be applied again."));
+                    else W.Toast(ToastKind.Success, Loc.S("Ajustes aplicados de nuevo.", "Tweaks applied again."));
+                }
                 catch (Exception ex) { W.ShowError(ex.Message); }
                 _busy = false;
                 await CheckAsync();

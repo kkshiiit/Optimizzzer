@@ -18,7 +18,11 @@ namespace Optimizzzer.Core
         public override ActionSnapshot Snapshot(SystemContext ctx)
         {
             var current = ctx.Services.GetStartMode(Service);
-            return new ActionSnapshot { Kind = "svc", Existed = current != null, Data = current?.ToString() };
+            return new ActionSnapshot
+            {
+                Kind = "svc", Existed = current != null, Data = current?.ToString(),
+                WasRunning = current != null && ctx.Services.IsRunning(Service),
+            };
         }
 
         public override void Apply(SystemContext ctx)
@@ -31,7 +35,10 @@ namespace Optimizzzer.Core
         public override void Revert(SystemContext ctx, ActionSnapshot s)
         {
             if (!s.Existed || !ctx.Services.Exists(Service)) return;
-            ctx.Services.SetStartMode(Service, (StartMode)Enum.Parse(typeof(StartMode), s.Data));
+            var mode = (StartMode)Enum.Parse(typeof(StartMode), s.Data);
+            ctx.Services.SetStartMode(Service, mode);
+            // Disabling stopped it; undo brings it back to work right away instead of after a reboot.
+            if (s.WasRunning && mode != StartMode.Disabled) ctx.Services.Start(Service);
         }
 
         public override string Describe(Lang lang) =>

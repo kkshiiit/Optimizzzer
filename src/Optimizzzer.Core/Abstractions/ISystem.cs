@@ -30,6 +30,9 @@ namespace Optimizzzer.Core
         void SetStartMode(string name, StartMode mode);
         /// <summary>Best effort, never throws for a service that is already stopped.</summary>
         void Stop(string name);
+        bool IsRunning(string name);
+        /// <summary>Best effort, never throws for a service that is already running.</summary>
+        void Start(string name);
     }
 
     public interface ITaskScheduler

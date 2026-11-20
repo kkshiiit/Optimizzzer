@@ -40,7 +40,17 @@ namespace Optimizzzer.App.Shell
         public const string Interface = "";   // Window
         public const string Update = "";      // Sync
         public const string Network = "";     // Globe
-        public const string Services = "";    // Gear
+        public const string Services = "\uE912";    // Manage: services are managed system components
+        public const string Settings = "\uE713";    // Gear: app settings
+        public const string Home = "\uE80F";
+        public const string Help = "\uE897";
+        public const string Export = "\uEDE1";
+        public const string Import = "\uE8B5";
+        public const string Glossary = "\uE82D";    // Dictionary
+        public const string Keyboard = "\uE765";
+        public const string Stopwatch = "\uE916";
+        public const string SpeedMedium = "\uEC49";
+        public const string Folder = "\uE8B7";
         public const string Apps = "";        // All apps
         public const string Cleanup = "";     // Delete
         public const string Repair = "";      // Wrench
@@ -88,6 +98,18 @@ namespace Optimizzzer.App.Shell
         }
 
         public static string For(Risk r) => r == Risk.Safe ? CheckCircle : r == Risk.Moderate ? Warning : Error;
+
+        /// <summary>Speed rises with the level; the controller marks the gaming level.</summary>
+        public static string For(Level l)
+        {
+            switch (l)
+            {
+                case Level.Quick: return Stopwatch;
+                case Level.Balanced: return SpeedMedium;
+                case Level.Gaming: return Gaming;
+                default: return Performance;
+            }
+        }
     }
 
     public static class Names
@@ -248,6 +270,17 @@ namespace Optimizzzer.App.Shell
             return row;
         }
 
+        /// <summary>A small labelled fact (impact, reversible, restart): icon plus words, quiet colour.</summary>
+        public static FrameworkElement Chip(string icon, string text, string brush = "FgMuted", string tooltip = null)
+        {
+            var row = Row(4, Icon(icon, 12, brush), Text(text, 12, false, brush, wrap: false));
+            var b = new Border { Child = row, Padding = new Thickness(8, 2, 8, 2), CornerRadius = new CornerRadius(4), Margin = new Thickness(0, 0, 6, 0) };
+            b.SetResourceReference(Border.BackgroundProperty, "SurfaceAlt");
+            if (tooltip != null) b.ToolTip = tooltip;
+            AutomationProperties.SetName(b, text);
+            return b;
+        }
+
         public static FrameworkElement Notice(string icon, string brush, string text)
         {
             var g = new Grid();
@@ -270,7 +303,7 @@ namespace Optimizzzer.App.Shell
             var bar = new ProgressBar { Minimum = 0, Maximum = 1, Value = 0, Margin = new Thickness(0, 12, 0, 0), MaxWidth = 420, HorizontalAlignment = HorizontalAlignment.Left, Width = 420 };
             AutomationProperties.SetName(bar, text);
             var view = Stack(0, label, bar);
-            return (view, (v, msg) => { bar.Value = v; if (msg != null) label.Text = msg; });
+            return (view, (v, msg) => { Theme.AnimateValue(bar, v); if (msg != null) label.Text = msg; });
         }
 
         public static FrameworkElement ErrorState(string what, string detail, Action retry)

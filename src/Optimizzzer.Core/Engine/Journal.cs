@@ -63,15 +63,23 @@ namespace Optimizzzer.Core
             Directory.CreateDirectory(_dir);
             var path = Path.Combine(_dir, "session-" + session.Id + ".json");
             var tmp = path + ".tmp";
-            using (var fs = File.Create(tmp)) Serializer.WriteObject(fs, session);
-            if (File.Exists(path)) File.Delete(path);
-            File.Move(tmp, path);
+            using (var fs = new FileStream(tmp, FileMode.Create, FileAccess.Write, FileShare.None, 4096, FileOptions.WriteThrough))
+                Serializer.WriteObject(fs, session);
+            // Replace swaps the files in one step, so a crash never leaves the session without a file on disk.
+            if (File.Exists(path)) File.Replace(tmp, path, null);
+            else File.Move(tmp, path);
         }
 
         public IList<JournalSession> LoadAll()
         {
             var list = new List<JournalSession>();
             if (!Directory.Exists(_dir)) return list;
+            // A leftover .tmp whose .json is missing means the process stopped between writing and moving: keep it.
+            foreach (var tmp in Directory.GetFiles(_dir, "session-*.json.tmp"))
+            {
+                var target = tmp.Substring(0, tmp.Length - 4);
+                try { if (!File.Exists(target)) File.Move(tmp, target); else File.Delete(tmp); } catch (Exception) { }
+            }
             foreach (var f in Directory.GetFiles(_dir, "session-*.json"))
             {
                 try

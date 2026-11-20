@@ -98,8 +98,12 @@ namespace Optimizzzer.App.Pages
                             Loc.S("Si algo deja de funcionar, deshaz el cambio desde Historial o vuelve a ponerlo en Manual aquí.", "If something stops working, undo it from History or set it back to Manual here."),
                             Loc.S("Deshabilitar", "Disable"), danger: true))
                         { Refill(); return; }
-                        await ApplyManual(ManualTweaks.Service(i.Name, i.DisplayName, mode));
-                        i.StartMode = mode;
+                        // The row only changes when Windows accepted the new mode.
+                        if (await ApplyManual(ManualTweaks.Service(i.Name, i.DisplayName, mode)))
+                        {
+                            i.StartMode = mode;
+                            W.Toast(ToastKind.Success, i.DisplayName + ": " + ServiceStartAction.ModeName(mode, Loc.Lang));
+                        }
                         Refill();
                     };
                     seg.Children.Add(rb);
@@ -109,16 +113,17 @@ namespace Optimizzzer.App.Pages
             return CleanupPage.Row(Ui.Icon(Icons.Services, 16, "FgMuted"), info, right);
         }
 
-        private async Task ApplyManual(Tweak t)
+        private async Task<bool> ApplyManual(Tweak t)
         {
             try
             {
                 await S.EnsureReadyAsync();
                 var session = await Task.Run(() => S.Engine.Apply(new[] { t }, new ApplyOptions { CreateRestorePoint = false }));
                 var e = session.Entries.FirstOrDefault();
-                if (e != null && e.ResultKind == EntryResult.Failed) W.ShowError(e.Error);
+                if (e != null && e.ResultKind == EntryResult.Failed) { W.ShowError(e.Error); return false; }
+                return true;
             }
-            catch (Exception ex) { W.ShowError(ex.Message); }
+            catch (Exception ex) { W.ShowError(ex.Message); return false; }
         }
     }
 

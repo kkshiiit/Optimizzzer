@@ -75,8 +75,11 @@ namespace Optimizzzer.Tests
         public bool Exists(string name) => Modes.ContainsKey(name);
         public StartMode? GetStartMode(string name) => Modes.TryGetValue(name, out var m) ? m : (StartMode?)null;
         public void SetStartMode(string name, StartMode mode) => Modes[name] = mode;
-        public void Stop(string name) { }
-        public string Dump() => string.Join(";", Modes.OrderBy(m => m.Key).Select(m => m.Key + "=" + m.Value));
+        public HashSet<string> Running { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        public void Stop(string name) => Running.Remove(name);
+        public bool IsRunning(string name) => Running.Contains(name);
+        public void Start(string name) => Running.Add(name);
+        public string Dump() => string.Join(";", Modes.OrderBy(m => m.Key).Select(m => m.Key + "=" + m.Value + (Running.Contains(m.Key) ? "+run" : "")));
     }
 
     public sealed class FakeTasks : ITaskScheduler
@@ -95,9 +98,13 @@ namespace Optimizzzer.Tests
         public HashSet<string> Schemes { get; } = new HashSet<string>(StringComparer.OrdinalIgnoreCase) { "381b4222-f694-41f0-9685-ff5bb260df2e" };
         public FakeRegistry Registry { get; set; }
 
+        /// <summary>The next powercfg call whose arguments contain this text fails.</summary>
+        public string FailNext { get; set; }
+
         public ProcessResult Run(string file, string arguments, int timeoutMs = 120000)
         {
             Calls.Add(file + " " + arguments);
+            if (FailNext != null && arguments.Contains(FailNext)) { FailNext = null; return new ProcessResult(1, "", "denied"); }
             if (file != "powercfg") return new ProcessResult(0, "", "");
             var a = arguments.Split(' ');
             switch (a[0].ToLowerInvariant())

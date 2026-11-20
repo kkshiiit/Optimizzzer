@@ -66,7 +66,7 @@ namespace Optimizzzer.Windows
                 "Get-AppxPackage -AllUsers -Name '" + n + "' | ForEach-Object { Remove-AppxPackage -Package $_.PackageFullName -AllUsers -ErrorAction SilentlyContinue };" +
                 "Get-AppxPackage -Name '" + n + "' | Remove-AppxPackage -ErrorAction SilentlyContinue;" +
                 "Get-AppxProvisionedPackage -Online | Where-Object DisplayName -eq '" + n + "' | Remove-AppxProvisionedPackage -Online -ErrorAction SilentlyContinue | Out-Null;" +
-                "if (Get-AppxPackage -Name '" + n + "') { Write-Error 'still installed'; exit 1 }");
+                "if (Get-AppxPackage -AllUsers -Name '" + n + "') { Write-Error 'still installed for at least one user'; exit 1 }");
             Refresh();
             if (!r.Ok) throw new InvalidOperationException("Could not remove " + packageName + ": " + (r.Error.Length > 0 ? r.Error : r.Output).Trim());
         }

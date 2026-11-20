@@ -35,6 +35,9 @@ namespace Optimizzzer.Core
     {
         public List<string> Reverted { get; } = new List<string>();
         public List<string> Failed { get; } = new List<string>();
+        /// <summary>Tweaks that cannot be undone by design (app removals). Not a failure.</summary>
+        public List<string> NotReversible { get; } = new List<string>();
+        public bool NothingFound => Reverted.Count == 0 && Failed.Count == 0 && NotReversible.Count == 0;
     }
 
     public sealed class TweakEngine
@@ -101,6 +104,7 @@ namespace Optimizzzer.Core
                 var t = tweaks[i];
                 progress?.Report(new ApplyProgress { Done = i, Total = tweaks.Count, Current = t });
                 var entry = ApplyOne(t);
+                if (entry.ResultKind == EntryResult.Applied) SupersedeManual(session, entry);
                 session.Entries.Add(entry);
                 _store.Save(session);
                 progress?.Report(new ApplyProgress { Done = i + 1, Total = tweaks.Count, Current = t, LastEntry = entry });
@@ -156,21 +160,28 @@ namespace Optimizzzer.Core
             return entry;
         }
 
+        private static bool SameId(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
         /// <summary>Puts a tweak back to how it was before Optimizzzer first changed it.</summary>
         public UndoResult Undo(string tweakId, IList<Tweak> catalog)
         {
             var result = new UndoResult();
-            var tweak = catalog.FirstOrDefault(t => t.Id == tweakId);
+            var tweak = catalog.FirstOrDefault(t => SameId(t.Id, tweakId));
             var sessions = _store.LoadAll();
             var open = sessions
                 .SelectMany(s => s.Entries.Select(e => new { s, e }))
-                .Where(x => x.e.TweakId == tweakId && !x.e.Reverted && x.e.ResultKind == EntryResult.Applied)
+                .Where(x => SameId(x.e.TweakId, tweakId) && !x.e.Reverted && x.e.ResultKind == EntryResult.Applied)
                 .ToList();
             if (open.Count == 0 || tweak == null) return result;
+            if (!tweak.Reversible) { result.NotReversible.Add(tweak.Id); return result; }
 
-            // The earliest entry holds the original state; later ones only re-applied after Windows reverted it.
-            var first = open[0].e;
-            bool ok = RevertEntry(tweak, first);
+            // Later entries exist when the tweak was applied again after Windows reverted part of it, and they can
+            // hold actions the first entry never touched. Revert the union, using the oldest snapshot of each action.
+            var records = new Dictionary<int, ActionRecord>();
+            foreach (var x in open)
+                foreach (var rec in x.e.Actions)
+                    if (!records.ContainsKey(rec.Index)) records[rec.Index] = rec;
+            bool ok = RevertRecords(tweak, records.Values.OrderBy(r => r.Index));
             // A failed undo stays open so it can be retried from History.
             if (ok)
             {
@@ -178,21 +189,22 @@ namespace Optimizzzer.Core
                 foreach (var x in open) { x.e.Reverted = true; x.e.RevertedUtc = now; }
                 foreach (var s in open.Select(x => x.s).Distinct()) _store.Save(s);
             }
-            (ok ? result.Reverted : result.Failed).Add(tweakId);
+            (ok ? result.Reverted : result.Failed).Add(tweak.Id);
             return result;
         }
 
         public UndoResult UndoSession(string sessionId, IList<Tweak> catalog)
         {
             var result = new UndoResult();
-            var session = _store.LoadAll().FirstOrDefault(s => s.Id == sessionId);
+            var session = _store.LoadAll().FirstOrDefault(s => SameId(s.Id, sessionId));
             if (session == null) return result;
             foreach (var e in session.Entries.AsEnumerable().Reverse())
             {
                 if (e.Reverted || e.ResultKind != EntryResult.Applied) continue;
-                var tweak = catalog.FirstOrDefault(t => t.Id == e.TweakId);
+                var tweak = catalog.FirstOrDefault(t => SameId(t.Id, e.TweakId));
                 if (tweak == null) { result.Failed.Add(e.TweakId); continue; }
-                bool ok = RevertEntry(tweak, e);
+                if (!tweak.Reversible) { result.NotReversible.Add(e.TweakId); continue; }
+                bool ok = RevertRecords(tweak, e.Actions);
                 if (ok)
                 {
                     e.Reverted = true;
@@ -204,10 +216,10 @@ namespace Optimizzzer.Core
             return result;
         }
 
-        private bool RevertEntry(Tweak tweak, JournalEntry e)
+        private bool RevertRecords(Tweak tweak, IEnumerable<ActionRecord> records)
         {
             bool ok = true;
-            foreach (var rec in e.Actions.AsEnumerable().Reverse())
+            foreach (var rec in records.Reverse())
             {
                 if (rec.Index >= tweak.Actions.Count) { ok = false; continue; }
                 var a = tweak.Actions[rec.Index];
@@ -216,6 +228,29 @@ namespace Optimizzzer.Core
                 catch (Exception) { ok = false; }
             }
             return ok;
+        }
+
+        /// <summary>
+        /// A manual change replaces any earlier manual change to the same service or task: the earlier entries are
+        /// closed, and the new entry inherits the oldest snapshot, so undo returns to the state before the first one.
+        /// Without this, Drift would report the earlier choice as "reverted by Windows".
+        /// </summary>
+        private void SupersedeManual(JournalSession current, JournalEntry entry)
+        {
+            var target = ManualTweaks.TargetOf(entry.TweakId);
+            if (target == null) return;
+            var now = _clock().ToString("o", CultureInfo.InvariantCulture);
+            var sessions = _store.LoadAll().Where(s => s.Id != current.Id).Concat(new[] { current }).ToList();
+            var older = sessions
+                .SelectMany(s => s.Entries.Select(e => new { s, e }))
+                .Where(x => !x.e.Reverted && x.e.ResultKind == EntryResult.Applied && x.e != entry && ManualTweaks.TargetOf(x.e.TweakId) == target)
+                .OrderBy(x => x.e.AppliedUtc, StringComparer.Ordinal)
+                .ToList();
+            if (older.Count == 0) return;
+            var original = older[0].e.Actions.FirstOrDefault();
+            if (original != null && entry.Actions.Count > 0) entry.Actions[0].Snapshot = original.Snapshot;
+            foreach (var x in older) { x.e.Reverted = true; x.e.RevertedUtc = now; }
+            foreach (var s in older.Select(x => x.s).Distinct().Where(s => s != current)) _store.Save(s);
         }
 
         /// <summary>Tweaks Optimizzzer applied that Windows (usually an update) has since changed back.</summary>
@@ -229,7 +264,7 @@ namespace Optimizzzer.Core
             var drifted = new List<Tweak>();
             foreach (var id in applied)
             {
-                var t = catalog.FirstOrDefault(x => x.Id == id);
+                var t = catalog.FirstOrDefault(x => SameId(x.Id, id));
                 if (t == null) continue;
                 TweakStatus st;
                 try { st = Detect(t); } catch (Exception) { continue; }

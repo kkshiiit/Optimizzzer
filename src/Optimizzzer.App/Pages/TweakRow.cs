@@ -51,7 +51,16 @@ namespace Optimizzzer.App.Pages
             titleRow.Children.Add(title);
             titleRow.Children.Add(Ui.RiskMarker(t.Risk));
             var statusText = Names.Of(status);
-            var info = Ui.Stack(4, titleRow, Ui.Muted(Loc.S(t.Summary)),
+            // Three plain facts so nobody has to open the details to know what kind of change this is.
+            var chips = new WrapPanel { Margin = new Thickness(0, 2, 0, 0) };
+            string impact = t.Impact == Impact.High ? Loc.S("Impacto alto", "High impact") : t.Impact == Impact.Medium ? Loc.S("Impacto medio", "Medium impact") : Loc.S("Impacto bajo", "Low impact");
+            chips.Children.Add(Ui.Chip(Icons.Performance, impact, "FgMuted", Loc.S("Cuánto se suele notar. Es una estimación, no una medición.", "How noticeable it usually is. An estimate, not a measurement.")));
+            chips.Children.Add(t.Reversible
+                ? Ui.Chip(Icons.Undo, Loc.S("Se puede deshacer", "Can be undone"))
+                : Ui.Chip(Icons.Error, Loc.S("No se deshace", "Cannot be undone"), "Advanced"));
+            if (t.Restart != RestartKind.None)
+                chips.Children.Add(Ui.Chip(Icons.Restart, t.Restart == RestartKind.Reboot ? Loc.S("Reiniciar equipo", "Restart PC") : t.Restart == RestartKind.SignOut ? Loc.S("Cerrar sesión", "Sign out") : Loc.S("Reinicia el Explorador", "Restarts Explorer")));
+            var info = Ui.Stack(4, titleRow, Ui.Muted(Loc.S(t.Summary)), chips,
                 statusText.Length > 0 ? Ui.Text(statusText, 12, true, status == TweakStatus.Applied ? "Success" : "FgMuted") : null);
             // Clicking the text toggles the checkbox, like a label.
             info.Background = Brushes.Transparent;
