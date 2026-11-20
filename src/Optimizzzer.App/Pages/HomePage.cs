@@ -166,6 +166,10 @@ namespace Optimizzzer.App.Pages
 
         // ---------- The confirmation sheet ----------
 
+        /// <summary>Self-test only: the last level sheet's buttons, to check they stay on screen at any size.</summary>
+        public Button SheetApplyForTest { get; private set; }
+        public Button SheetDetailsForTest { get; private set; }
+
         public void OpenLevel(Level level)
         {
             if (S.ScanResults == null) { W.Toast(ToastKind.Info, Loc.S("Espera a que termine el análisis.", "Wait for the scan to finish.")); return; }
@@ -221,9 +225,8 @@ namespace Optimizzzer.App.Pages
                         row.Children.Add(Ui.RiskMarker(t.Risk));
                         list.Children.Add(row);
                     }
-                    var sv = Ui.Scroll(list);
-                    sv.MaxHeight = 220;
-                    detailsHost.Content = sv;
+                    // No inner scroll: the sheet body scrolls as a whole, so the buttons below never move off screen.
+                    detailsHost.Content = list;
                 }
                 detailsHost.Visibility = detailsHost.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
             };
@@ -243,9 +246,11 @@ namespace Optimizzzer.App.Pages
             };
             var buttons = Ui.Row(8, cancel, apply);
             buttons.HorizontalAlignment = HorizontalAlignment.Right;
+            SheetApplyForTest = apply;
+            SheetDetailsForTest = toggle;
 
             var head = Ui.Row(12, Ui.Icon(Icons.For(level), 28, "AccentText"), Ui.Stack(0, Ui.H2(Loc.S("Nivel " + l.Name.Es, l.Name.En + " level")), Ui.Muted(Loc.S(l.Tagline))));
-            var sheet = MainWindow.Card(Ui.Stack(16, head, Ui.Text(Loc.S("Qué va a pasar", "What will happen"), 14, true), what, rp, Ui.Stack(4, toggle, detailsHost), buttons));
+            var sheet = MainWindow.Sheet(head, Ui.Stack(16, Ui.Text(Loc.S("Qué va a pasar", "What will happen"), 14, true), what, rp, Ui.Stack(4, toggle, detailsHost)), buttons);
             AutomationProperties.SetName(sheet, Loc.S("Nivel " + l.Name.Es, l.Name.En + " level"));
             W.ShowOverlay(sheet, W.CloseOverlay, 640);
             Dispatcher(() => apply.Focus());

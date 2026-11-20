@@ -33,14 +33,21 @@ namespace Optimizzzer.App.Shell
         private AppPage _current;
         private TaskCompletionSource<bool> _dialog;
         private Action _overlayEscape;
+        private ColumnDefinition _navColumn;
+        private TextBlock _brand;
+
+        /// <summary>Below this width the menu shows icons only and pages use tighter margins.</summary>
+        public const double CompactWidth = 1100;
+        /// <summary>True while the window is narrow (or the user collapsed the menu): pages read it when they build.</summary>
+        public static bool Compact { get; private set; }
         private IInputElement _focusBeforeOverlay;
 
         public MainWindow(AppState state)
         {
             _state = state;
             Title = "Optimizzzer";
-            Width = 1200; Height = 800; MinWidth = 920; MinHeight = 620;
-            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            MinWidth = 640; MinHeight = 480;
+            PlaceOnScreen();
             UseLayoutRounding = true;
             SnapsToDevicePixels = true;
             TextOptions.SetTextFormattingMode(this, TextFormattingMode.Ideal);
@@ -64,7 +71,8 @@ namespace Optimizzzer.App.Shell
             _pages.Add(new SettingsPage(state, this));
             _pages.Add(new HelpPage(state, this));
 
-            _root.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(244) });
+            _navColumn = new ColumnDefinition { Width = new GridLength(244) };
+            _root.ColumnDefinitions.Add(_navColumn);
             _root.ColumnDefinitions.Add(new ColumnDefinition());
             _root.Children.Add(BuildNav());
 
@@ -84,6 +92,8 @@ namespace Optimizzzer.App.Shell
             Content = _root;
 
             PreviewKeyDown += OnKey;
+            SizeChanged += (_, __) => UpdateLayoutMode();
+            Closing += (_, __) => RememberPlacement();
             SourceInitialized += (_, __) => Theme.MatchTitleBar(this);
             Theme.Changed += OnThemeChanged;
             Closed += (_, __) => Theme.Changed -= OnThemeChanged;
@@ -110,6 +120,84 @@ namespace Optimizzzer.App.Shell
 
         // ---------- Navigation ----------
 
+        // ---------- Window size, full screen and compact layout ----------
+
+        /// <summary>
+        /// Starts at the last size and place, or at 1200x800 shrunk to fit the screen. A window taller than the screen
+        /// hides its own title bar (minimize, maximize, close), which is what happened on 768 px screens.
+        /// </summary>
+        private void PlaceOnScreen()
+        {
+            var work = SystemParameters.WorkArea;
+            var saved = _state.SavedPlacement;
+            var virt = new Rect(SystemParameters.VirtualScreenLeft, SystemParameters.VirtualScreenTop, SystemParameters.VirtualScreenWidth, SystemParameters.VirtualScreenHeight);
+            if (saved.HasValue && saved.Value.Width >= MinWidth && saved.Value.Height >= MinHeight && virt.Contains(new Point(saved.Value.Left + 40, saved.Value.Top + 20)))
+            {
+                WindowStartupLocation = WindowStartupLocation.Manual;
+                Left = saved.Value.Left; Top = saved.Value.Top;
+                Width = Math.Min(saved.Value.Width, work.Width); Height = Math.Min(saved.Value.Height, work.Height);
+                if (_state.SavedMaximized) WindowState = WindowState.Maximized;
+                return;
+            }
+            Width = Math.Max(MinWidth, Math.Min(1200, work.Width * 0.9));
+            Height = Math.Max(MinHeight, Math.Min(800, work.Height * 0.9));
+            WindowStartupLocation = WindowStartupLocation.CenterScreen;
+            if (work.Width < 1100 || work.Height < 720) WindowState = WindowState.Maximized;
+        }
+
+        private void RememberPlacement()
+        {
+            if (_fullScreen) ToggleFullScreen();
+            var b = RestoreBounds;
+            if (!b.IsEmpty) _state.SavePlacement(b, WindowState == WindowState.Maximized);
+        }
+
+        private bool _fullScreen;
+        private WindowState _stateBeforeFullScreen;
+
+        public bool IsFullScreen => _fullScreen;
+
+        /// <summary>F11: the whole screen for the app, no title bar or taskbar. F11 or Esc goes back.</summary>
+        public void ToggleFullScreen()
+        {
+            if (!_fullScreen)
+            {
+                _stateBeforeFullScreen = WindowState;
+                WindowStyle = WindowStyle.None;
+                // Maximizing from Normal makes a borderless window cover the taskbar too.
+                if (WindowState == WindowState.Maximized) WindowState = WindowState.Normal;
+                WindowState = WindowState.Maximized;
+                _fullScreen = true;
+                Toast(ToastKind.Info, Loc.S("Pantalla completa. Pulsa F11 o Esc para salir.", "Full screen. Press F11 or Esc to leave."));
+            }
+            else
+            {
+                WindowStyle = WindowStyle.SingleBorderWindow;
+                WindowState = _stateBeforeFullScreen;
+                _fullScreen = false;
+            }
+        }
+
+        public void ToggleNavCollapsed()
+        {
+            _state.NavCollapsed = !_state.NavCollapsed;
+            _state.SaveSettings();
+            UpdateLayoutMode(force: true);
+        }
+
+        private void UpdateLayoutMode(bool force = false)
+        {
+            if (ActualWidth <= 0) return;
+            bool compact = ActualWidth < CompactWidth || _state.NavCollapsed;
+            if (compact == Compact && !force) return;
+            Compact = compact;
+            _navColumn.Width = new GridLength(compact ? 72 : 244);
+            BuildNavItems();
+            // Pages read Compact when they build; rebuild them all (only the visible one is built right away).
+            foreach (var p in _pages) p.Invalidate();
+            if (_current != null && !OverlayOpen) { ShowView(_current.View); _current.OnShown(); }
+        }
+
         private FrameworkElement BuildNav()
         {
             var g = new Grid { Margin = new Thickness(12, 20, 12, 12) };
@@ -118,9 +206,9 @@ namespace Optimizzzer.App.Shell
             g.RowDefinitions.Add(new RowDefinition());
             g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
 
-            var brand = Ui.Text("Optimizzzer", 20, true);
-            brand.Margin = new Thickness(12, 0, 0, 16);
-            g.Children.Add(brand);
+            _brand = Ui.Text("Optimizzzer", 20, true, "Fg", wrap: false);
+            _brand.Margin = new Thickness(12, 0, 0, 16);
+            g.Children.Add(_brand);
 
             _nav = new StackPanel();
             var scroll = Ui.Scroll(_nav);
@@ -139,23 +227,35 @@ namespace Optimizzzer.App.Shell
             _nav.Children.Clear();
             _navBottom.Children.Clear();
             _navButtons.Clear();
+            _brand.Text = Compact ? "Oz" : "Optimizzzer";
+            AutomationProperties.SetName(_brand, "Optimizzzer");
             void Section(string text)
             {
+                if (Compact)
+                {
+                    // Icons only: a thin line keeps the groups apart without words that would not fit.
+                    _nav.Children.Add(Ui.Divider(8, 8));
+                    return;
+                }
                 var t = Ui.Muted(text, 12);
-                t.Margin = new Thickness(12, _nav.Children.Count == 0 ? 0 : 16, 0, 6);
+                t.Margin = new Thickness(12, 12, 0, 4);
                 _nav.Children.Add(t);
             }
-            AddNav(_nav, "home");
-            AddNav(_nav, "wizard");
-            Section(Loc.S("Herramientas", "Tools"));
-            foreach (var k in new[] { "cleanup", "repair", "dns", "startup", "services", "tasks", "apps" }) AddNav(_nav, k);
+            // Grouped by task: start and results first, then cleaning, then system parts, then tracking.
+            foreach (var k in new[] { "home", "wizard", "measure" }) AddNav(_nav, k);
+            Section(Loc.S("Limpiar y reparar", "Clean and repair"));
+            foreach (var k in new[] { "cleanup", "apps", "repair" }) AddNav(_nav, k);
+            Section(Loc.S("Sistema", "System"));
+            foreach (var k in new[] { "startup", "services", "tasks", "dns" }) AddNav(_nav, k);
             Section(Loc.S("Seguimiento", "Tracking"));
-            foreach (var k in new[] { "history", "drift", "measure" }) AddNav(_nav, k);
+            foreach (var k in new[] { "history", "drift" }) AddNav(_nav, k);
 
             var search = NavAction(Icons.Search, Loc.S("Buscar", "Search"), ShowPalette, Loc.S("Buscar (Ctrl+K)", "Search (Ctrl+K)"), "Ctrl+K");
             _navBottom.Children.Add(search);
             AddNav(_navBottom, "settings");
             AddNav(_navBottom, "help");
+            var collapse = NavAction(Icons.Menu, _state.NavCollapsed ? Loc.S("Expandir menú", "Expand menu") : Loc.S("Contraer menú", "Collapse menu"), ToggleNavCollapsed);
+            _navBottom.Children.Add(collapse);
         }
 
         private void AddNav(Panel panel, string key)
@@ -169,6 +269,15 @@ namespace Optimizzzer.App.Shell
 
         private static Button NavAction(string icon, string text, Action onClick, string name = null, string hint = null)
         {
+            if (Compact)
+            {
+                // Icon only, with the name as tooltip and for screen readers.
+                var only = new Button { Content = Ui.Icon(icon, 18), Margin = new Thickness(0, 1, 0, 1), ToolTip = name ?? text, HorizontalContentAlignment = HorizontalAlignment.Center };
+                only.SetResourceReference(StyleProperty, "NavButton");
+                AutomationProperties.SetName(only, name ?? text);
+                only.Click += (_, __) => onClick();
+                return only;
+            }
             var g = new Grid();
             g.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             g.ColumnDefinitions.Add(new ColumnDefinition());
@@ -327,8 +436,15 @@ namespace Optimizzzer.App.Shell
             var shade = new Border();
             shade.SetResourceReference(Border.BackgroundProperty, "Overlay");
             shade.MouseLeftButtonDown += (_, __) => _overlayEscape?.Invoke();
-            card.MaxWidth = maxWidth;
-            card.Margin = new Thickness(24, top ? 72 : 24, 24, 24);
+            card.MaxWidth = Compact ? Math.Max(320, ActualWidth - 32) : maxWidth;
+            double topGap = top && ActualHeight >= 640 ? 72 : 24;
+            card.Margin = new Thickness(Compact ? 16 : 24, topGap, Compact ? 16 : 24, 24);
+            // Never taller than the window: sheets scroll inside and keep their buttons visible.
+            void Fit() { if (_overlay.ActualHeight > 0) card.MaxHeight = Math.Max(200, _overlay.ActualHeight - topGap - 24); }
+            Fit();
+            SizeChangedEventHandler onSize = (_, __) => Fit();
+            _overlay.SizeChanged += onSize;
+            _overlayCleanup = () => _overlay.SizeChanged -= onSize;
             card.HorizontalAlignment = HorizontalAlignment.Center;
             card.VerticalAlignment = top ? VerticalAlignment.Top : VerticalAlignment.Center;
             Theme.Elevate(card, 2);
@@ -342,8 +458,34 @@ namespace Optimizzzer.App.Shell
             Theme.Enter(card, 12, 180);
         }
 
+        private Action _overlayCleanup;
+
+        /// <summary>
+        /// A raised card whose header and buttons stay fixed while the middle scrolls, so nothing is cut off
+        /// on short screens.
+        /// </summary>
+        public static Border Sheet(UIElement header, UIElement body, UIElement buttons, double padding = 28)
+        {
+            var g = new Grid();
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            g.RowDefinitions.Add(new RowDefinition { Height = new GridLength(1, GridUnitType.Star) });
+            g.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            if (header is FrameworkElement hf) hf.Margin = new Thickness(0, 0, 0, 16);
+            if (header != null) g.Children.Add(header);
+            var sv = Ui.Scroll(body);
+            sv.Margin = new Thickness(0, 0, -8, 0);
+            if (body is FrameworkElement bf) bf.Margin = new Thickness(0, 0, 8, 0);
+            Grid.SetRow(sv, 1);
+            g.Children.Add(sv);
+            if (buttons is FrameworkElement btf) btf.Margin = new Thickness(0, 16, 0, 0);
+            if (buttons != null) { Grid.SetRow(buttons, 2); g.Children.Add(buttons); }
+            return Card(g, padding);
+        }
+
         public void CloseOverlay()
         {
+            _overlayCleanup?.Invoke();
+            _overlayCleanup = null;
             _overlay.Visibility = Visibility.Collapsed;
             _overlay.Children.Clear();
             _overlayEscape = null;
@@ -381,8 +523,7 @@ namespace Optimizzzer.App.Shell
             var cancel = Ui.Secondary(cancelText ?? Loc.S("Cancelar", "Cancel"), () => Done(false));
             var buttons = Ui.Row(8, cancel, confirm);
             buttons.HorizontalAlignment = HorizontalAlignment.Right;
-            buttons.Margin = new Thickness(0, 12, 0, 0);
-            var card = Card(Ui.Stack(12, Ui.H2(title), Ui.Text(message), buttons));
+            var card = Sheet(Ui.H2(title), Ui.Text(message), buttons);
             AutomationProperties.SetName(card, title);
             ShowOverlay(card, () => Done(false), 520);
             Dispatcher.BeginInvoke(new Action(() => (danger ? cancel : confirm).Focus()), DispatcherPriority.Input);
@@ -401,6 +542,7 @@ namespace Optimizzzer.App.Shell
         {
             var mods = Keyboard.Modifiers;
             if (e.Key == Key.Escape && OverlayOpen) { _overlayEscape?.Invoke(); e.Handled = true; return; }
+            if (e.Key == Key.F11 || (e.Key == Key.Escape && _fullScreen)) { ToggleFullScreen(); e.Handled = true; return; }
             if (OverlayOpen) return;
             if (e.Key == Key.K && mods == ModifierKeys.Control) { ShowPalette(); e.Handled = true; }
             else if (e.Key == Key.F1) { Navigate("help"); e.Handled = true; }
@@ -425,8 +567,10 @@ namespace Optimizzzer.App.Shell
             foreach (var p in _pages)
                 list.Add(new Command { Icon = p.Icon, Title = p.Title, Subtitle = Loc.S("Ir a la página", "Go to page"), Run = () => Navigate(p.Key) });
             foreach (var l in Levels.All)
-                list.Add(new Command { Icon = Icons.Play, Title = Loc.S("Aplicar nivel ", "Apply level ") + Loc.S(l.Name), Subtitle = Loc.S(l.Tagline), Run = () => { Navigate("home"); PageOf<HomePage>().OpenLevel(l.Level); } });
+                list.Add(new Command { Icon = Icons.Play, Title = Loc.S("Aplicar el nivel " + l.Name.Es, "Apply the " + l.Name.En + " level"), Subtitle = Loc.S(l.Tagline), Run = () => { Navigate("home"); PageOf<HomePage>().OpenLevel(l.Level); } });
             list.Add(new Command { Icon = Icons.Undo, Title = Loc.S("Deshacer la última sesión", "Undo the last session"), Subtitle = Loc.S("Historial", "History"), Run = () => { Navigate("home"); PageOf<HomePage>().UndoLast(); } });
+            list.Add(new Command { Icon = Icons.FullScreen, Title = Loc.S("Pantalla completa", "Full screen"), Subtitle = "F11", Run = ToggleFullScreen });
+            list.Add(new Command { Icon = Icons.Menu, Title = Loc.S("Contraer o expandir el menú", "Collapse or expand the menu"), Subtitle = Loc.S("Más espacio para el contenido", "More room for content"), Run = ToggleNavCollapsed });
             list.Add(new Command { Icon = Icons.Theme, Title = Loc.S("Cambiar tema", "Change theme"), Subtitle = Loc.S("Ajustes", "Settings"), Run = () => Navigate("settings") });
             list.Add(new Command { Icon = Icons.Save, Title = Loc.S("Exportar o importar una selección", "Export or import a selection"), Subtitle = Loc.S("Personalizar", "Customize"), Run = () => PageOf<WizardPage>().OpenSelection() });
             foreach (var t in _state.Catalog)
@@ -479,7 +623,7 @@ namespace Optimizzzer.App.Shell
             };
             Fill("");
             var hint = Ui.Muted(Loc.S("Enter abre el primero · Flechas para moverte · Esc para cerrar", "Enter opens the first · Arrows to move · Esc to close"), 12);
-            var card = Card(Ui.Stack(12, search, results, hint), 16);
+            var card = Sheet(search, results, hint, 16);
             AutomationProperties.SetName(card, Loc.S("Buscar", "Search"));
             ShowOverlay(card, CloseOverlay, 620, top: true);
             Dispatcher.BeginInvoke(new Action(() => search.Box.Focus()), DispatcherPriority.Input);
@@ -522,7 +666,7 @@ namespace Optimizzzer.App.Shell
                 footer.Children.Add(right);
                 var ic = Ui.Icon(icon, 32, "AccentText");
                 ic.HorizontalAlignment = HorizontalAlignment.Left;
-                var card = Card(Ui.Stack(12, ic, Ui.H2(title), Ui.Text(text), footer));
+                var card = Sheet(Ui.Stack(12, ic, Ui.H2(title)), Ui.Text(text), footer);
                 AutomationProperties.SetName(card, title);
                 ShowOverlay(card, Close, 520);
                 Dispatcher.BeginInvoke(new Action(() => next.Focus()), DispatcherPriority.Input);

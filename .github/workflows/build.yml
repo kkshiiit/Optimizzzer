@@ -111,7 +111,8 @@ jobs:
           New-Item -ItemType Directory -Force docs/screenshots | Out-Null
           $pick = 'Light-Es-page-home','Light-Es-level-sheet-Quick','Light-Es-level-sheet-Maximum','Light-Es-command-palette','Light-Es-tour',
                   'Light-Es-wizard-step-Select','Light-Es-wizard-step-Review','Light-Es-page-settings','Light-Es-page-help','Light-Es-page-cleanup',
-                  'Light-Es-level-result','Dark-En-page-home','Dark-En-level-sheet-Quick','Dark-En-wizard-step-Select','Dark-En-page-services','Dark-En-page-settings'
+                  'Light-Es-level-result','Dark-En-page-home','Dark-En-level-sheet-Quick','Dark-En-wizard-step-Select','Dark-En-page-services','Dark-En-page-settings',
+                  'Size-1280x720-home','Size-1024x640-home','Size-1024x640-level-sheet-Maximum','Size-800x600-home','Size-800x600-level-sheet-Maximum','Size-800x600-customize'
           Remove-Item docs/screenshots/*.png -ErrorAction SilentlyContinue
           foreach ($n in $pick) { if (Test-Path "screenshots/$n.png") { Copy-Item "screenshots/$n.png" "docs/screenshots/$n.png" -Force } }
           git config user.name "github-actions[bot]"

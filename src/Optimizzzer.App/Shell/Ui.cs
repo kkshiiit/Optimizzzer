@@ -46,6 +46,9 @@ namespace Optimizzzer.App.Shell
         public const string Help = "\uE897";
         public const string Export = "\uEDE1";
         public const string More = "\uE712";
+        public const string FullScreen = "\uE740";
+        public const string BackToWindow = "\uE73F";
+        public const string Menu = "\uE700";       // Collapse or expand the navigation menu
         public const string Import = "\uE8B5";
         public const string Glossary = "\uE82D";    // Dictionary
         public const string Keyboard = "\uE765";

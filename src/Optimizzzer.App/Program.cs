@@ -226,6 +226,60 @@ namespace Optimizzzer.App
                     });
                 }
 
+            // Small screens: the level sheet's Apply button must stay inside the window, with the full list open.
+            Check("responsive sizes", () =>
+            {
+                Theme.Apply(ThemeChoice.Dark);
+                Loc.Lang = Lang.Es;
+                foreach (var (width, height) in new[] { (1280, 720), (1024, 640), (800, 600) })
+                {
+                    var w = new MainWindow(state) { ShowInTaskbar = false, WindowStartupLocation = WindowStartupLocation.Manual, Left = -10000, Top = -10000 };
+                    w.WindowState = WindowState.Normal;
+                    w.Width = width; w.Height = height;
+                    w.Show();
+                    Pump(); Pump(); Pump();
+                    w.UpdateLayout();
+                    var name = "Size-" + width + "x" + height;
+                    log.AppendLine("  " + name + ": compact menu " + MainWindow.Compact);
+                    SelfTestTools.Screenshot(w, name + "-home");
+                    var home = w.PageOf<Pages.HomePage>();
+                    home.OpenLevel(Level.Maximum);
+                    if (w.OverlayOpen)
+                    {
+                        home.SheetDetailsForTest.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
+                        Pump(); Pump(); Pump();
+                        w.UpdateLayout();
+                        var root = (FrameworkElement)w.Content;
+                        var apply = home.SheetApplyForTest;
+                        var box = apply.TransformToAncestor(root).TransformBounds(new Rect(apply.RenderSize));
+                        if (box.Bottom > root.ActualHeight + 0.5 || box.Right > root.ActualWidth + 0.5 || box.Top < 0)
+                            throw new Exception(name + ": the Apply button is outside the window (" + box + " in " + root.ActualWidth + "x" + root.ActualHeight + ")");
+                        SelfTestTools.Screenshot(w, name + "-level-sheet-Maximum");
+                        w.CloseOverlay();
+                    }
+                    w.Navigate("wizard");
+                    Pump(); Pump();
+                    SelfTestTools.Screenshot(w, name + "-customize");
+                    w.Close();
+                }
+            });
+
+            // F11 goes full screen and back to the same state.
+            Check("full screen", () =>
+            {
+                var w = new MainWindow(state) { ShowInTaskbar = false };
+                w.WindowState = WindowState.Normal;
+                w.Show();
+                Pump();
+                w.ToggleFullScreen();
+                Pump();
+                if (!w.IsFullScreen || w.WindowStyle != WindowStyle.None || w.WindowState != WindowState.Maximized) throw new Exception("F11 did not go full screen");
+                w.ToggleFullScreen();
+                Pump();
+                if (w.IsFullScreen || w.WindowStyle != WindowStyle.SingleBorderWindow || w.WindowState != WindowState.Normal) throw new Exception("F11 did not restore the window");
+                w.Close();
+            });
+
             // Only on a throwaway machine (CI sets this variable): apply two tweaks through the wizard UI, then undo them.
             if (Environment.GetEnvironmentVariable("OPTIMIZZZER_SELFTEST_APPLY") == "1")
                 Check("wizard apply and undo", () =>
