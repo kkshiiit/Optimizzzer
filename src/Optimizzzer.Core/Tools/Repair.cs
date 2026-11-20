@@ -53,6 +53,28 @@ namespace Optimizzzer.Core.Tools
                 new Text("Ejecuta netsh advfirewall reset: vuelve el Firewall de Windows a su configuración de fábrica. Se borran las reglas que añadieron los programas; algunos te pedirán permiso otra vez la próxima vez que se conecten.", "Runs netsh advfirewall reset: returns Windows Firewall to its factory settings. Rules programs added are deleted; some will ask for permission again the next time they connect.")),
         };
 
+        static RepairDetails()
+        {
+            Map["searchIndex"] = (new Text("Si la búsqueda de Windows no encuentra archivos que sí existen, o el indexador usa mucho disco sin parar.", "When Windows search cannot find files that exist, or the indexer keeps using the disk."),
+                new Text("Detiene el servicio de búsqueda, borra su índice (Windows.edb) y lo vuelve a iniciar. Windows reconstruye el índice en las horas siguientes.", "Stops the search service, deletes its index (Windows.edb) and starts it again. Windows rebuilds the index over the next hours."));
+            Map["timeSync"] = (new Text("Si el reloj va mal, las webs dan error de certificado o un juego con anticheat no conecta.", "When the clock is wrong, sites show certificate errors or a game with anti-cheat will not connect."),
+                new Text("Inicia el servicio de hora de Windows y sincroniza con time.windows.com (w32tm /resync).", "Starts the Windows Time service and syncs with time.windows.com (w32tm /resync)."));
+            Map["printQueue"] = (new Text("Si un documento se queda atascado en la cola y no se imprime nada más.", "When a document is stuck in the queue and nothing else prints."),
+                new Text("Detiene la cola de impresión, borra los trabajos pendientes de spool\\PRINTERS y la vuelve a iniciar. Las impresoras no se tocan.", "Stops the print spooler, deletes pending jobs in spool\\PRINTERS and starts it again. Printers are not touched."));
+            Map["proxyReset"] = (new Text("Si nada carga después de quitar una VPN, un antivirus o un programa sospechoso.", "When nothing loads after removing a VPN, an antivirus or a suspicious program."),
+                new Text("Quita el proxy del sistema (netsh winhttp reset proxy) y el del usuario. Si usas un proxy a propósito, tendrás que volver a ponerlo.", "Removes the system proxy (netsh winhttp reset proxy) and the user's. If you use a proxy on purpose, you will need to set it again."));
+            Map["audio"] = (new Text("Si no hay sonido o desaparecieron los altavoces o auriculares de la lista.", "When there is no sound or speakers or headphones vanished from the list."),
+                new Text("Reinicia los servicios de audio de Windows (Audiosrv y AudioEndpointBuilder). El sonido se corta un par de segundos.", "Restarts the Windows audio services (Audiosrv and AudioEndpointBuilder). Sound stops for a couple of seconds."));
+            Map["powerPlans"] = (new Text("Si otro optimizador dejó planes de energía raros o falta el plan Equilibrado.", "When another optimizer left strange power plans or Balanced is missing."),
+                new Text("Restaura los planes de energía de fábrica (powercfg -restoredefaultschemes). Se borran los planes personalizados, incluido Máximo rendimiento.", "Restores factory power plans (powercfg -restoredefaultschemes). Custom plans are deleted, Ultimate Performance included."));
+            Map["perfCounters"] = (new Text("Si el Administrador de tareas o el Monitor de rendimiento no muestran CPU, disco o red.", "When Task Manager or Performance Monitor do not show CPU, disk or network."),
+                new Text("Reconstruye los contadores de rendimiento desde la copia de Windows (lodctr /R) y los vuelve a sincronizar con WMI.", "Rebuilds the performance counters from Windows' copy (lodctr /R) and resyncs them with WMI."));
+            Map["wmi"] = (new Text("Si programas de hardware o Windows dan errores al leer información del equipo.", "When hardware programs or Windows fail to read PC information."),
+                new Text("Comprueba el repositorio de WMI y, solo si está dañado, lo repara con la herramienta oficial (winmgmt /salvagerepository).", "Checks the WMI repository and, only if it is damaged, repairs it with the official tool (winmgmt /salvagerepository)."));
+            Map["defender"] = (new Text("Para asegurarte de que el antivirus está al día y no hay nada raro.", "To make sure the antivirus is up to date and nothing is wrong."),
+                new Text("Actualiza las firmas de Microsoft Defender y hace un análisis rápido. Puede tardar unos minutos.", "Updates Microsoft Defender signatures and runs a quick scan. It can take a few minutes."));
+        }
+
         public static Text When(string id) => id != null && Map.TryGetValue(id, out var t) ? t.When : null;
         public static Text What(string id) => id != null && Map.TryGetValue(id, out var t) ? t.What : null;
     }
@@ -123,6 +145,96 @@ namespace Optimizzzer.Core.Tools
                 Description = new Text("Vuelve el Firewall a su configuración de fábrica y borra las reglas que añadieron los programas.", "Returns the Firewall to factory settings and deletes rules programs added."),
                 Duration = new Text("Menos de 1 minuto", "Under 1 minute"),
                 Steps = { new RepairStep("netsh.exe", "advfirewall reset") },
+            },
+            new RepairTask
+            {
+                Id = "searchIndex", Title = new Text("Reconstruir el índice de búsqueda", "Rebuild the search index"),
+                Description = new Text("Borra el índice de la búsqueda de Windows para que se cree de nuevo, limpio.", "Deletes the Windows search index so it is built again, clean."),
+                Duration = new Text("1 minuto (el índice se completa en horas)", "1 minute (the index completes over hours)"),
+                Steps =
+                {
+                    new RepairStep("net.exe", "stop wsearch", tolerateExitCode: true),
+                    new RepairStep("cmd.exe", "/c del /f /q \"%ProgramData%\\Microsoft\\Search\\Data\\Applications\\Windows\\Windows.edb\"", tolerateExitCode: true),
+                },
+                CleanupSteps = { new RepairStep("cmd.exe", "/c sc query wsearch | find \"RUNNING\" >nul || net start wsearch") },
+            },
+            new RepairTask
+            {
+                Id = "timeSync", Title = new Text("Sincronizar la hora", "Sync the clock"),
+                Description = new Text("Pone el reloj en hora con el servidor de Microsoft.", "Sets the clock from Microsoft's time server."),
+                Duration = new Text("Menos de 1 minuto", "Under 1 minute"),
+                Steps =
+                {
+                    new RepairStep("cmd.exe", "/c sc query w32time | find \"RUNNING\" >nul || net start w32time"),
+                    new RepairStep("w32tm.exe", "/resync /force"),
+                },
+            },
+            new RepairTask
+            {
+                Id = "printQueue", Title = new Text("Desatascar la cola de impresión", "Clear a stuck print queue"),
+                Description = new Text("Borra los trabajos de impresión atascados.", "Deletes stuck print jobs."),
+                Duration = new Text("Menos de 1 minuto", "Under 1 minute"),
+                Steps =
+                {
+                    new RepairStep("net.exe", "stop spooler", tolerateExitCode: true),
+                    new RepairStep("cmd.exe", "/c del /f /q \"%SystemRoot%\\System32\\spool\\PRINTERS\\*.*\"", tolerateExitCode: true),
+                },
+                CleanupSteps = { new RepairStep("cmd.exe", "/c sc query spooler | find \"RUNNING\" >nul || net start spooler") },
+            },
+            new RepairTask
+            {
+                Id = "proxyReset", Title = new Text("Quitar el proxy", "Remove the proxy"),
+                Description = new Text("Vuelve la conexión a directa, sin proxy.", "Sets the connection back to direct, without a proxy."),
+                Duration = new Text("Menos de 1 minuto", "Under 1 minute"),
+                Steps =
+                {
+                    new RepairStep("netsh.exe", "winhttp reset proxy"),
+                    new RepairStep("reg.exe", "add \"HKCU\\Software\\Microsoft\\Windows\\CurrentVersion\\Internet Settings\" /v ProxyEnable /t REG_DWORD /d 0 /f"),
+                },
+            },
+            new RepairTask
+            {
+                Id = "audio", Title = new Text("Reparar el sonido", "Repair sound"),
+                Description = new Text("Reinicia los servicios de audio de Windows.", "Restarts the Windows audio services."),
+                Duration = new Text("Menos de 1 minuto", "Under 1 minute"),
+                Steps = { new RepairStep("net.exe", "stop audiosrv", tolerateExitCode: true), new RepairStep("net.exe", "stop AudioEndpointBuilder", tolerateExitCode: true) },
+                CleanupSteps =
+                {
+                    new RepairStep("cmd.exe", "/c sc query AudioEndpointBuilder | find \"RUNNING\" >nul || net start AudioEndpointBuilder"),
+                    new RepairStep("cmd.exe", "/c sc query audiosrv | find \"RUNNING\" >nul || net start audiosrv"),
+                },
+            },
+            new RepairTask
+            {
+                Id = "powerPlans", Title = new Text("Restaurar los planes de energía de fábrica", "Restore factory power plans"),
+                Description = new Text("Deja solo los planes originales de Windows.", "Keeps only Windows' original plans."),
+                Duration = new Text("Menos de 1 minuto", "Under 1 minute"),
+                Steps = { new RepairStep("powercfg.exe", "-restoredefaultschemes") },
+            },
+            new RepairTask
+            {
+                Id = "perfCounters", Title = new Text("Reconstruir los contadores de rendimiento", "Rebuild performance counters"),
+                Description = new Text("Arregla el Administrador de tareas cuando no muestra uso de CPU, disco o red.", "Fixes Task Manager when it shows no CPU, disk or network use."),
+                Duration = new Text("1 a 2 minutos", "1 to 2 minutes"),
+                Steps = { new RepairStep("lodctr.exe", "/R"), new RepairStep("winmgmt.exe", "/resyncperf", tolerateExitCode: true) },
+            },
+            new RepairTask
+            {
+                Id = "wmi", Title = new Text("Comprobar y reparar WMI", "Check and repair WMI"),
+                Description = new Text("Revisa la base de datos de información del sistema y la repara solo si está dañada.", "Checks the system information database and repairs it only if damaged."),
+                Duration = new Text("1 a 3 minutos", "1 to 3 minutes"),
+                Steps = { new RepairStep("cmd.exe", "/c winmgmt /verifyrepository | find /i \"inconsistent\" >nul && winmgmt /salvagerepository || exit /b 0") },
+            },
+            new RepairTask
+            {
+                Id = "defender", Title = new Text("Actualizar Defender y análisis rápido", "Update Defender and quick scan"),
+                Description = new Text("Descarga las últimas firmas del antivirus de Windows y analiza las zonas más comunes.", "Downloads the latest Windows antivirus signatures and scans the most common places."),
+                Duration = new Text("2 a 10 minutos", "2 to 10 minutes"),
+                Steps =
+                {
+                    new RepairStep("cmd.exe", "/c \"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -SignatureUpdate", tolerateExitCode: true),
+                    new RepairStep("cmd.exe", "/c \"%ProgramFiles%\\Windows Defender\\MpCmdRun.exe\" -Scan -ScanType 1"),
+                },
             },
             new RepairTask
             {

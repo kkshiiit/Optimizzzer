@@ -32,6 +32,12 @@ namespace Optimizzzer.Core.Tools
         [DataMember(Order = 15, EmitDefaultValue = false)] public long? ShutdownMs { get; set; }
         [DataMember(Order = 16, EmitDefaultValue = false)] public long? TempFolderMb { get; set; }
         [DataMember(Order = 17, EmitDefaultValue = false)] public List<DriveSpace> Drives { get; set; }
+        /// <summary>How long the sample lasted; CPU and memory are averages over it.</summary>
+        [DataMember(Order = 18, EmitDefaultValue = false)] public int? Seconds { get; set; }
+        [DataMember(Order = 19, EmitDefaultValue = false)] public double? CpuPeakPercent { get; set; }
+        [DataMember(Order = 20, EmitDefaultValue = false)] public long? MemoryPeakMb { get; set; }
+        /// <summary>Exported to CSV: kept forever instead of being cleaned after 7 days.</summary>
+        [DataMember(Order = 21, EmitDefaultValue = false)] public bool Kept { get; set; }
     }
 
     [DataContract]
@@ -45,6 +51,16 @@ namespace Optimizzzer.Core.Tools
     public interface IMeasurer
     {
         Measurement Take(string label);
+    }
+
+    public static class MeasurementRetention
+    {
+        public static readonly TimeSpan MaxAge = TimeSpan.FromDays(7);
+
+        /// <summary>Measurements older than 7 days go, unless they were exported (Kept). Returns what stays.</summary>
+        public static List<Measurement> Prune(IEnumerable<Measurement> all, DateTime nowUtc) =>
+            all.Where(m => m.Kept || !DateTime.TryParse(m.TakenUtc, System.Globalization.CultureInfo.InvariantCulture, System.Globalization.DateTimeStyles.RoundtripKind, out var t)
+                || nowUtc - t.ToUniversalTime() <= MaxAge).ToList();
     }
 
     public sealed class MeasurementStore
@@ -62,6 +78,30 @@ namespace Optimizzzer.Core.Tools
                 using (var fs = File.OpenRead(_path)) return (List<Measurement>)Serializer.ReadObject(fs);
             }
             catch (System.Exception) { return new List<Measurement>(); }
+        }
+
+        /// <summary>Silently removes measurements older than 7 days that were never exported.</summary>
+        public int PruneOld(DateTime nowUtc)
+        {
+            var all = Load().ToList();
+            var keep = MeasurementRetention.Prune(all, nowUtc);
+            if (keep.Count == all.Count) return 0;
+            Save(keep);
+            return all.Count - keep.Count;
+        }
+
+        /// <summary>Marks every measurement as exported, so the 7-day cleanup never removes them.</summary>
+        public void MarkAllKept()
+        {
+            var all = Load().ToList();
+            foreach (var m in all) m.Kept = true;
+            Save(all);
+        }
+
+        private void Save(List<Measurement> all)
+        {
+            Directory.CreateDirectory(Path.GetDirectoryName(_path));
+            using (var fs = File.Create(_path)) Serializer.WriteObject(fs, all);
         }
 
         public void Clear()
@@ -107,8 +147,10 @@ namespace Optimizzzer.Core.Tools
         {
             (new Text("Duración del último arranque", "Last boot duration"), "s", true, m => m.BootMs / 1000.0),
             (new Text("Duración del último apagado", "Last shutdown duration"), "s", true, m => m.ShutdownMs / 1000.0),
-            (new Text("Uso de CPU (promedio de unos segundos)", "CPU use (average over a few seconds)"), "%", true, m => m.CpuPercent),
-            (new Text("Memoria en uso", "Memory in use"), "MB", true, m => m.MemoryUsedMb),
+            (new Text("Uso de CPU (promedio)", "CPU use (average)"), "%", true, m => m.CpuPercent),
+            (new Text("Uso de CPU (pico)", "CPU use (peak)"), "%", true, m => m.CpuPeakPercent),
+            (new Text("Memoria en uso (promedio)", "Memory in use (average)"), "MB", true, m => m.MemoryUsedMb),
+            (new Text("Memoria en uso (pico)", "Memory in use (peak)"), "MB", true, m => m.MemoryPeakMb),
             (new Text("Memoria comprometida (RAM y archivo de paginación)", "Committed memory (RAM and page file)"), "MB", true, m => m.CommittedMb),
             (new Text("Procesos en ejecución", "Running processes"), "", true, m => m.Processes),
             (new Text("Hilos", "Threads"), "", true, m => m.Threads),

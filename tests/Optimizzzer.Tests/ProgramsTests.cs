@@ -219,3 +219,22 @@ namespace Optimizzzer.Tests
         }
     }
 }
+
+namespace Optimizzzer.Tests
+{
+    public class RetentionTests
+    {
+        [Fact]
+        public void Old_measurements_go_after_a_week_unless_exported()
+        {
+            var now = new DateTime(2026, 11, 20, 12, 0, 0, DateTimeKind.Utc);
+            var fresh = new Measurement { TakenUtc = now.AddDays(-2).ToString("o") };
+            var old = new Measurement { TakenUtc = now.AddDays(-8).ToString("o") };
+            var kept = new Measurement { TakenUtc = now.AddDays(-30).ToString("o"), Kept = true };
+            var left = MeasurementRetention.Prune(new[] { fresh, old, kept }, now);
+            Assert.Contains(fresh, left);
+            Assert.Contains(kept, left);
+            Assert.DoesNotContain(old, left);
+        }
+    }
+}

@@ -195,6 +195,9 @@ namespace Optimizzzer.App.Pages
     {
         private IList<Measurement> _all;
         private bool _taking;
+        private int _seconds = 10;
+        private int _metric; // index into MeasurementCompare.Metrics for the large chart
+        private Action<double, string> _takeProgress;
         private bool? _afterRestartScheduled;
 
         public MeasurePage(AppState s, MainWindow w) : base(s, w) { }
@@ -205,7 +208,8 @@ namespace Optimizzzer.App.Pages
         public override void OnShown()
         {
             if (_all != null) return;
-            _ = Task.Run(() => (S.Win.Measurements.Load(), MeasureAfterRestart.IsScheduled(S.Win.Process)))
+            // Measurements older than 7 days go silently, unless they were exported to CSV.
+            _ = Task.Run(() => { S.Win.Measurements.PruneOld(DateTime.UtcNow); return (S.Win.Measurements.Load(), MeasureAfterRestart.IsScheduled(S.Win.Process)); })
                 .ContinueWith(t => { (_all, _afterRestartScheduled) = t.Result; W.Dispatcher.Invoke(() => W.RefreshCurrentIf(this)); });
         }
 
@@ -262,12 +266,14 @@ namespace Optimizzzer.App.Pages
         {
             var intro = Loc.S("Números leídos de este equipo, nunca estimados. Mide antes y después de cambiar algo, y otra vez tras reiniciar, para comparar.",
                 "Numbers read from this PC, never estimated. Measure before and after changing something, and again after restarting, to compare.");
-            var take = Ui.Primary(_taking ? Loc.S("Midiendo…", "Measuring…") : Loc.S("Medir ahora", "Measure now"), async () =>
+            var take = Ui.Primary(_taking ? Loc.S("Midiendo…", "Measuring…") : Loc.S("Medir ahora (", "Measure now (") + _seconds + " s)", async () =>
             {
                 _taking = true; W.RefreshCurrentIf(this);
                 try
                 {
-                    await Task.Run(() => S.Win.Measurements.Add(S.Win.Measurer.Take("manual")));
+                    int secs = _seconds;
+                    var progress = new Progress<int>(i => _takeProgress?.Invoke(i / (double)secs, Loc.S("Midiendo: quedan ", "Measuring: ") + (secs - i) + Loc.S(" s. Usa el equipo como siempre o déjalo quieto.", " s left. Use the PC as usual or leave it alone.")));
+                    await Task.Run(() => S.Win.Measurements.Add(S.Win.Measurer.Take("manual", secs, progress)));
                     _all = await Task.Run(() => S.Win.Measurements.Load());
                     W.Toast(ToastKind.Success, Loc.S("Medición guardada.", "Measurement saved."));
                 }
@@ -277,6 +283,25 @@ namespace Optimizzzer.App.Pages
             take.IsEnabled = !_taking;
 
             if (_all == null) { var (v, _) = Ui.Loading(Loc.S("Cargando…", "Loading…")); return Frame(intro, v); }
+            FrameworkElement taking = null;
+            if (_taking)
+            {
+                var (tv, upd) = Ui.Loading(Loc.S("Midiendo durante ", "Measuring for ") + _seconds + " s…");
+                _takeProgress = upd;
+                taking = Ui.Panel(tv, 16);
+            }
+            var duration = new StackPanel { Orientation = Orientation.Horizontal };
+            AutomationProperties.SetName(duration, Loc.S("Duración de la medición", "Measurement length"));
+            foreach (var sec in new[] { 10, 30, 60 })
+            {
+                var rb = new RadioButton { GroupName = "measureSecs", Content = sec + " s", IsChecked = _seconds == sec, Margin = new Thickness(0, 0, 6, 0), IsEnabled = !_taking };
+                rb.SetResourceReference(FrameworkElement.StyleProperty, "Segment");
+                var v2 = sec;
+                rb.Checked += (_, __) => { _seconds = v2; W.RefreshCurrentIf(this); };
+                duration.Children.Add(rb);
+            }
+            var durationRow = Ui.Row(12, Ui.Text(Loc.S("Duración", "Length"), 14, true), duration,
+                Ui.Muted(Loc.S("Más tiempo = media más fiable del uso real.", "Longer = a more reliable average of real use."), 13));
 
             var tools = new WrapPanel();
             void Tool(Button b) { b.Margin = new Thickness(0, 0, 8, 8); tools.Children.Add(b); }
@@ -366,10 +391,95 @@ namespace Optimizzzer.App.Pages
             }
 
             var count = _all.Count == 1 ? Loc.S("1 medición guardada.", "1 measurement saved.") : _all.Count + Loc.S(" mediciones guardadas.", " measurements saved.");
-            var body = Ui.Stack(16, tools, scheduledNote, Ui.Panel(g),
+            var body = Ui.Stack(16, durationRow, taking, tools, scheduledNote, BigChart(), Ui.Panel(g),
                 Ui.Muted(count + Loc.S(" La duración del arranque y del apagado la registra Windows; si no aparece, su registro de rendimiento está desactivado. El punto verde indica mejora entre la primera y la última; el ámbar, que empeoró.",
-                    " Boot and shutdown durations are logged by Windows; if they are missing, its performance log is turned off. The green dot means better from first to latest; amber means worse."), 12));
+                    " Boot and shutdown durations are logged by Windows; if they are missing, its performance log is turned off. The green dot means better from first to latest; amber means worse."), 12),
+                Ui.Muted(Loc.S("Las mediciones de más de 7 días se borran solas al abrir esta página. Si exportas a CSV, se conservan.", "Measurements older than 7 days are removed automatically when you open this page. Exporting to CSV keeps them."), 12));
             return Frame(intro, body, Footer(null, take));
+        }
+
+        /// <summary>
+        /// The large chart: one metric over every saved measurement, with its range, the dates, a mark where changes
+        /// were applied, and one plain sentence that reads the trend.
+        /// </summary>
+        private FrameworkElement BigChart()
+        {
+            var metrics = MeasurementCompare.Metrics.Select((m, i) => (m, i)).Where(x => _all.Any(a => x.m.Get(a).HasValue)).ToList();
+            if (metrics.Count == 0) return null;
+            if (!metrics.Any(x => x.i == _metric)) _metric = metrics[0].i;
+            var metric = MeasurementCompare.Metrics[_metric];
+
+            var chips = new WrapPanel { Margin = new Thickness(0, 0, 0, 12) };
+            foreach (var (m, i) in metrics)
+            {
+                var rb = new RadioButton { GroupName = "chartMetric", Content = Loc.S(m.Name), IsChecked = i == _metric, Margin = new Thickness(0, 0, 6, 6) };
+                rb.SetResourceReference(FrameworkElement.StyleProperty, "Segment");
+                var idx = i;
+                rb.Checked += (_, __) => { _metric = idx; W.RefreshCurrentIf(this); };
+                chips.Children.Add(rb);
+            }
+
+            var points = _all.Select(a => (When: DateTime.Parse(a.TakenUtc, null, System.Globalization.DateTimeStyles.RoundtripKind).ToLocalTime(), V: metric.Get(a), a.Label)).Where(p => p.V.HasValue).ToList();
+            FrameworkElement chartOrNote;
+            string reading = null;
+            if (points.Count < 2)
+                chartOrNote = Ui.Empty(Loc.S("Necesitas al menos 2 mediciones de esta métrica para ver su evolución.", "You need at least 2 measurements of this metric to see how it changes."));
+            else
+            {
+                double min = points.Min(p => p.V.Value), max = points.Max(p => p.V.Value);
+                if (Math.Abs(max - min) < 1e-9) { max = min + 1; }
+                var canvas = new Canvas { Height = 170, ClipToBounds = true };
+                void Draw()
+                {
+                    canvas.Children.Clear();
+                    double w = Math.Max(100, canvas.ActualWidth), h = canvas.Height, left = 4, right = w - 4, top = 10, bottom = h - 20;
+                    double X(int i) => left + (right - left) * i / Math.Max(1, points.Count - 1);
+                    double Y(double v) => bottom - (bottom - top) * (v - min) / (max - min);
+                    foreach (var y in new[] { top, (top + bottom) / 2, bottom })
+                    {
+                        var grid = new System.Windows.Shapes.Line { X1 = left, X2 = right, Y1 = y, Y2 = y, StrokeThickness = 1 };
+                        grid.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Divider");
+                        canvas.Children.Add(grid);
+                    }
+                    for (int i = 0; i < points.Count; i++)
+                        if (points[i].Label == "after")
+                        {
+                            var mark = new System.Windows.Shapes.Line { X1 = X(i), X2 = X(i), Y1 = top, Y2 = bottom, StrokeThickness = 1, StrokeDashArray = new System.Windows.Media.DoubleCollection { 3, 3 } };
+                            mark.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "Success");
+                            canvas.Children.Add(mark);
+                        }
+                    var line = new System.Windows.Shapes.Polyline { StrokeThickness = 2 };
+                    line.SetResourceReference(System.Windows.Shapes.Shape.StrokeProperty, "AccentText");
+                    for (int i = 0; i < points.Count; i++) line.Points.Add(new Point(X(i), Y(points[i].V.Value)));
+                    canvas.Children.Add(line);
+                    for (int i = 0; i < points.Count; i++)
+                    {
+                        var dot = new System.Windows.Shapes.Ellipse { Width = 6, Height = 6, ToolTip = points[i].When.ToString("g") + " · " + Format(points[i].V.Value, metric.Unit) };
+                        dot.SetResourceReference(System.Windows.Shapes.Shape.FillProperty, "AccentText");
+                        Canvas.SetLeft(dot, X(i) - 3); Canvas.SetTop(dot, Y(points[i].V.Value) - 3);
+                        canvas.Children.Add(dot);
+                    }
+                    var firstDate = Ui.Muted(points[0].When.ToString("d"), 12);
+                    Canvas.SetLeft(firstDate, left); Canvas.SetTop(firstDate, bottom + 4);
+                    canvas.Children.Add(firstDate);
+                    var lastDate = Ui.Muted(points[points.Count - 1].When.ToString("d"), 12);
+                    lastDate.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                    Canvas.SetLeft(lastDate, right - lastDate.DesiredSize.Width); Canvas.SetTop(lastDate, bottom + 4);
+                    canvas.Children.Add(lastDate);
+                }
+                canvas.SizeChanged += (_, __) => Draw();
+                var range = Ui.Row(16, Ui.Muted(Loc.S("Máximo: ", "Highest: ") + Format(points.Max(p => p.V.Value), metric.Unit), 13), Ui.Muted(Loc.S("Mínimo: ", "Lowest: ") + Format(points.Min(p => p.V.Value), metric.Unit), 13),
+                    points.Any(p => p.Label == "after") ? Ui.Row(6, Ui.Icon(Icons.CheckCircle, 12, "Success"), Ui.Muted(Loc.S("línea verde: se aplicaron cambios", "green line: changes were applied"), 13)) : null);
+                chartOrNote = Ui.Stack(8, canvas, range);
+                double first = points[0].V.Value, last = points[points.Count - 1].V.Value, diff = last - first;
+                bool better = metric.LowerIsBetter ? diff < 0 : diff > 0;
+                reading = Math.Abs(diff) < 1e-9
+                    ? Loc.S("Sin cambios entre la primera y la última medición.", "No change between the first and the latest measurement.")
+                    : Loc.S("Desde la primera medición, ", "Since the first measurement, ") + Loc.S(metric.Name).ToLowerInvariant() + (diff < 0 ? Loc.S(" bajó ", " went down by ") : Loc.S(" subió ", " went up by ")) + Format(Math.Abs(diff), metric.Unit)
+                      + (better ? Loc.S(": mejor.", ": better.") : Loc.S(": peor.", ": worse."));
+            }
+            var head = Ui.H3(Loc.S("Evolución", "Trend"));
+            return Ui.Panel(Ui.Stack(8, head, chips, chartOrNote, reading == null ? null : Ui.Text(reading, 14, true)), 20);
         }
 
         private void ExportCsv()
@@ -379,6 +489,9 @@ namespace Optimizzzer.App.Pages
             try
             {
                 System.IO.File.WriteAllText(dlg.FileName, MeasurementCompare.ToCsv(_all, Loc.Lang), new System.Text.UTF8Encoding(true));
+                // Exported means "I want these": they are no longer removed after 7 days.
+                S.Win.Measurements.MarkAllKept();
+                foreach (var m in _all) m.Kept = true;
                 W.Toast(ToastKind.Success, Loc.S("Exportado a ", "Exported to ") + System.IO.Path.GetFileName(dlg.FileName) + ".");
             }
             catch (Exception ex) { W.ShowError(ex.Message); }

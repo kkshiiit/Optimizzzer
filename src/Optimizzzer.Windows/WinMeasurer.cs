@@ -17,7 +17,42 @@ namespace Optimizzzer.Windows
         private readonly StartupManager _startup;
         public WinMeasurer(StartupManager startup) { _startup = startup; }
 
-        public Measurement Take(string label)
+        public Measurement Take(string label) => Take(label, 3, null);
+
+        /// <summary>
+        /// Samples CPU and memory once per second for <paramref name="seconds"/> and keeps the average and the peak;
+        /// a few seconds are not enough to see the real load. Progress reports the seconds done.
+        /// </summary>
+        public Measurement Take(string label, int seconds, IProgress<int> progress)
+        {
+            var m = TakeOnce(label);
+            var cpu = new System.Collections.Generic.List<double>();
+            var mem = new System.Collections.Generic.List<long>();
+            var commit = new System.Collections.Generic.List<long>();
+            GetSystemTimes(out var idle0, out var kernel0, out var user0);
+            for (int i = 1; i <= seconds; i++)
+            {
+                System.Threading.Thread.Sleep(1000);
+                if (GetSystemTimes(out var idle1, out var kernel1, out var user1))
+                {
+                    double idle = idle1 - idle0, total = (kernel1 - kernel0) + (user1 - user0);
+                    if (total > 0) cpu.Add(Math.Max(0, Math.Min(100, (total - idle) * 100.0 / total)));
+                    idle0 = idle1; kernel0 = kernel1; user0 = user1;
+                }
+                var s = new Native.MEMORYSTATUSEX { dwLength = (uint)Marshal.SizeOf(typeof(Native.MEMORYSTATUSEX)) };
+                if (Native.GlobalMemoryStatusEx(ref s)) mem.Add((long)((s.ullTotalPhys - s.ullAvailPhys) / 1024 / 1024));
+                var pi = new PERFORMANCE_INFORMATION { cb = (uint)Marshal.SizeOf(typeof(PERFORMANCE_INFORMATION)) };
+                if (GetPerformanceInfo(out pi, pi.cb)) commit.Add((long)((ulong)pi.CommitTotal * (ulong)pi.PageSize / 1024 / 1024));
+                progress?.Report(i);
+            }
+            m.Seconds = seconds;
+            if (cpu.Count > 0) { m.CpuPercent = Math.Round(cpu.Average(), 1); m.CpuPeakPercent = Math.Round(cpu.Max(), 1); }
+            if (mem.Count > 0) { m.MemoryUsedMb = (long)mem.Average(); m.MemoryPeakMb = mem.Max(); }
+            if (commit.Count > 0) m.CommittedMb = (long)commit.Average();
+            return m;
+        }
+
+        private Measurement TakeOnce(string label)
         {
             var m = new Measurement { TakenUtc = DateTime.UtcNow.ToString("o", CultureInfo.InvariantCulture), Label = label };
             Try(() =>
@@ -46,21 +81,10 @@ namespace Optimizzzer.Windows
                     m.Threads = (int)pi.ThreadCount;
                 }
             });
-            Try(() => m.CpuPercent = CpuOverSeconds(2));
             Try(() => m.TempFolderMb = FolderMb(Path.GetTempPath()));
             Try(() => m.Drives = DriveInfo.GetDrives().Where(d => d.DriveType == DriveType.Fixed && d.IsReady)
                 .Select(d => new DriveSpace { Name = d.Name.TrimEnd('\\'), FreeMb = d.AvailableFreeSpace / 1024 / 1024, TotalMb = d.TotalSize / 1024 / 1024 }).ToList());
             return m;
-        }
-
-        /// <summary>Total CPU use between two readings of the system times, like Task Manager does.</summary>
-        private static double? CpuOverSeconds(int seconds)
-        {
-            if (!GetSystemTimes(out var idle1, out var kernel1, out var user1)) return null;
-            System.Threading.Thread.Sleep(seconds * 1000);
-            if (!GetSystemTimes(out var idle2, out var kernel2, out var user2)) return null;
-            double idle = idle2 - idle1, total = (kernel2 - kernel1) + (user2 - user1); // kernel time includes idle time
-            return total <= 0 ? (double?)null : Math.Round(Math.Max(0, Math.Min(100, (total - idle) * 100.0 / total)), 1);
         }
 
         private static long FolderMb(string path)
