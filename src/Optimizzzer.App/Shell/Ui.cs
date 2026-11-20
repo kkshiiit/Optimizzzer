@@ -277,10 +277,15 @@ namespace Optimizzzer.App.Shell
         public static Button Secondary(string text, Action onClick, string icon = null) => Button(text, "SecondaryButton", onClick, icon);
         public static Button Subtle(string text, Action onClick, string icon = null, string automationName = null) => Button(text, "SubtleButton", onClick, icon, automationName);
 
-        /// <summary>A button that opens a small menu of related actions (keyboard: Enter or Space, then arrows).</summary>
+        /// <summary>
+        /// An icon-only button that opens a small menu of related actions (keyboard: Enter or Space, then arrows).
+        /// The name is the tooltip and what screen readers announce.
+        /// </summary>
         public static Button MenuButton(string text, string icon, params (string Text, string Icon, Action Run)[] items)
         {
-            var b = Button(text, "SubtleButton", null, icon);
+            var b = Button("", "SubtleButton", null, icon, text);
+            b.MinWidth = 40;
+            b.ToolTip = text;
             var menu = new ContextMenu { PlacementTarget = b, Placement = System.Windows.Controls.Primitives.PlacementMode.Bottom };
             foreach (var (label, glyph, run) in items)
             {
