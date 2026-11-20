@@ -53,12 +53,16 @@ namespace Optimizzzer.App.Shell
             TraceClock.Restart();
             _state = state;
             Title = "Optimizzzer";
-            try
+            // The icon is decoded after the first frame: a visible window comes first.
+            ContentRendered += (_, __) => Dispatcher.BeginInvoke(new Action(() =>
             {
-                using (var ico = typeof(MainWindow).Assembly.GetManifestResourceStream("Optimizzzer.app.ico"))
-                    if (ico != null) Icon = System.Windows.Media.Imaging.BitmapFrame.Create(ico, System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
-            }
-            catch (Exception) { } // the window works without its icon
+                try
+                {
+                    using (var ico = typeof(MainWindow).Assembly.GetManifestResourceStream("Optimizzzer.app.ico"))
+                        if (ico != null) Icon = System.Windows.Media.Imaging.BitmapFrame.Create(ico, System.Windows.Media.Imaging.BitmapCreateOptions.None, System.Windows.Media.Imaging.BitmapCacheOption.OnLoad);
+                }
+                catch (Exception) { } // the window works without its icon
+            }), DispatcherPriority.Background);
             Mark("icon");
             MinWidth = 640; MinHeight = 480;
             PlaceOnScreen();

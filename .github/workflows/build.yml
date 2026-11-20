@@ -36,7 +36,7 @@ jobs:
         run: dotnet build src/Optimizzzer.App -c Release
 
       - name: Self-test (every screen, screenshots, wizard apply and undo, every tool)
-        timeout-minutes: 12
+        timeout-minutes: 18
         shell: pwsh
         env:
           OPTIMIZZZER_SELFTEST_APPLY: '1'

@@ -89,7 +89,7 @@ namespace Optimizzzer.App.Pages
 
         private FrameworkElement Disclaimer()
         {
-            var accept = new CheckBox { Content = Loc.S("Entiendo que esto puede dejar mi equipo sin seguridad, sin actualizaciones o sin apps, y lo uso bajo mi responsabilidad.", "I understand this can leave my PC without security, updates or apps, and I use it at my own risk.") };
+            var accept = new CheckBox { Content = Ui.Text(Loc.S("Entiendo que esto puede dejar mi equipo sin seguridad, sin actualizaciones o sin apps, y lo uso bajo mi responsabilidad.", "I understand this can leave my PC without security, updates or apps, and I use it at my own risk.")) };
             var go = Ui.Primary(Loc.S("Aceptar y continuar", "Accept and continue"), () =>
             {
                 S.RiskAccepted = true; S.SaveSettings();

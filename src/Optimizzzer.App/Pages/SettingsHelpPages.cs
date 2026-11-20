@@ -58,7 +58,7 @@ namespace Optimizzzer.App.Pages
                 Ui.Muted(Loc.S(i.Why), 13))).ToArray());
             if (items.Count == 0) list.Children.Add(Ui.Muted(Loc.S("No hay datos guardados todavía.", "Nothing is saved yet."), 13));
 
-            var clean = new CheckBox { Content = Loc.S("Borrar todo al cerrar si no queda nada por deshacer (se conservan solo estos ajustes)", "Delete everything on close if nothing is left to undo (only these settings are kept)"), IsChecked = S.CleanOnExit };
+            var clean = new CheckBox { Content = Ui.Text(Loc.S("Borrar todo al cerrar si no queda nada por deshacer (se conservan solo estos ajustes)", "Delete everything on close if nothing is left to undo (only these settings are kept)"), IsChecked = S.CleanOnExit) };
             clean.Checked += (_, __) => { S.CleanOnExit = true; S.SaveSettings(); };
             clean.Unchecked += (_, __) => { S.CleanOnExit = false; S.SaveSettings(); };
 
