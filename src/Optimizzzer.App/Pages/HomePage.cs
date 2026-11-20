@@ -91,8 +91,8 @@ namespace Optimizzzer.App.Pages
             var heading = Ui.H2(Loc.S("Elige un nivel", "Pick a level"));
             heading.Margin = new Thickness(0, body.Children.Count > 0 ? 12 : 0, 0, 4);
             body.Children.Add(heading);
-            body.Children.Add(Ui.Muted(Loc.S("Cada nivel incluye los anteriores. Antes de aplicar verás exactamente qué cambia, y todo se puede deshacer.",
-                "Each level includes the ones before. Before applying you see exactly what changes, and everything can be undone.")));
+            body.Children.Add(Ui.Muted(Loc.S("Cada nivel incluye los anteriores. Antes de aplicar verás exactamente qué cambia. Los ajustes se pueden deshacer; las apps quitadas se reinstalan desde la Store.",
+                "Each level includes the ones before. Before applying you see exactly what changes. Settings can be undone; removed apps are reinstalled from the Store.")));
 
             var cards = new WrapPanel { Margin = new Thickness(0, 16, 0, 0) };
             foreach (var l in Levels.All) cards.Children.Add(LevelCard(l));
@@ -231,8 +231,8 @@ namespace Optimizzzer.App.Pages
                 W.CloseOverlay();
                 if (l.NeedsSecondConfirmation && !await W.Confirm(
                         Loc.S("¿Aplicar Máximo rendimiento?", "Apply Maximum performance?"),
-                        moderate + Loc.S(" de estos cambios son de riesgo moderado: quitan funciones como la búsqueda rápida de archivos o la hibernación a cambio de menos trabajo en segundo plano. Podrás deshacerlos desde Historial.",
-                            " of these changes are moderate risk: they remove features such as fast file search or hibernation in exchange for less background work. You can undo them from History."),
+                        moderate + Loc.S(" de estos cambios son de riesgo moderado: quitan funciones como la búsqueda rápida de archivos o la hibernación a cambio de menos trabajo en segundo plano. Podrás deshacerlos desde Historial; las apps quitadas se reinstalan desde la Store.",
+                            " of these changes are moderate risk: they remove features such as fast file search or hibernation in exchange for less background work. You can undo them from History; removed apps are reinstalled from the Store."),
                         Loc.S("Sí, aplicar", "Yes, apply"), danger: true)) return;
                 W.Navigate("wizard");
                 W.PageOf<WizardPage>().StartLevel(l, tweaks, restorePoint);

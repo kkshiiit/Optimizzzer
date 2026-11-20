@@ -59,7 +59,15 @@ namespace Optimizzzer.Core
 
         public FileJournalStore(string directory) { _dir = directory; }
 
+        // Save runs on the apply thread while pages load history on others: the .tmp recovery must never race a save.
+        private static readonly object Gate = new object();
+
         public void Save(JournalSession session)
+        {
+            lock (Gate) SaveCore(session);
+        }
+
+        private void SaveCore(JournalSession session)
         {
             Directory.CreateDirectory(_dir);
             var path = Path.Combine(_dir, "session-" + session.Id + ".json");
@@ -72,6 +80,11 @@ namespace Optimizzzer.Core
         }
 
         public IList<JournalSession> LoadAll()
+        {
+            lock (Gate) return LoadAllCore();
+        }
+
+        private IList<JournalSession> LoadAllCore()
         {
             var list = new List<JournalSession>();
             if (!Directory.Exists(_dir)) return list;

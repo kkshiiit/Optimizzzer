@@ -247,6 +247,7 @@ namespace Optimizzzer.App.Shell
         public void RebuildAll()
         {
             foreach (var p in _pages) p.Invalidate();
+            _commands = null; // titles are in the old language
             BuildNavItems();
             if (_current != null)
             {
@@ -496,9 +497,9 @@ namespace Optimizzzer.App.Shell
                 (Icons.Performance, Loc.S("Elige un nivel o ve ajuste por ajuste", "Pick a level or go tweak by tweak"),
                  Loc.S("En Inicio hay 4 niveles, de Rápido a Máximo rendimiento. Antes de aplicar ves exactamente qué va a cambiar y qué pierdes. En Personalizar eliges cada ajuste.",
                        "Home has 4 levels, from Quick to Maximum performance. Before applying you see exactly what will change and what you lose. In Customize you pick every tweak.")),
-                (Icons.Undo, Loc.S("Todo se puede deshacer", "Everything can be undone"),
-                 Loc.S("Se crea un punto de restauración y se guarda el valor anterior de cada cambio. En Historial deshaces un ajuste o una sesión entera. Ctrl+K busca cualquier cosa.",
-                       "A restore point is created and the previous value of every change is saved. In History you undo one tweak or a whole session. Ctrl+K searches anything.")),
+                (Icons.Undo, Loc.S("Los ajustes se pueden deshacer", "Settings can be undone"),
+                 Loc.S("Se crea un punto de restauración y se guarda el valor anterior de cada ajuste. En Historial deshaces uno o una sesión entera. Las apps que quites se vuelven a instalar desde la Store. Ctrl+K busca cualquier cosa.",
+                       "A restore point is created and the previous value of every setting is saved. In History you undo one or a whole session. Apps you remove are reinstalled from the Store. Ctrl+K searches anything.")),
             };
             int i = 0;
             void Close() { CloseOverlay(); _state.TourDone = true; _state.SaveSettings(); }

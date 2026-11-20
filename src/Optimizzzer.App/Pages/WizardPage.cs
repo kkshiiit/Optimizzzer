@@ -50,6 +50,7 @@ namespace Optimizzzer.App.Pages
         /// <summary>One-click level from Home: the user already read and confirmed the sheet, so go straight to Apply.</summary>
         public void StartLevel(LevelInfo level, IList<Tweak> tweaks, bool restorePoint)
         {
+            if (BusyApplying()) return;
             _level = level;
             S.Selected.Clear();
             foreach (var t in tweaks) S.Selected.Add(t.Id);
@@ -60,11 +61,21 @@ namespace Optimizzzer.App.Pages
         /// <summary>Opens the tweak list, optionally filtered (used by Ctrl+K and by export/import).</summary>
         public void OpenSelection(string query = null)
         {
+            if (BusyApplying()) return;
             W.Navigate(Key);
             if (S.ScanResults == null) return;
             _query = query ?? "";
             _category = null;
             GoTo(Step.Select);
+        }
+
+        /// <summary>While changes are being applied the selection must not change: show the running apply instead.</summary>
+        private bool BusyApplying()
+        {
+            if (!_applyRunning) return false;
+            W.Navigate(Key);
+            W.Toast(ToastKind.Info, Loc.S("Espera a que terminen los cambios en curso.", "Wait for the current changes to finish."));
+            return true;
         }
 
         public void ShowStepsForTest(Action<string> afterEach)
@@ -558,6 +569,10 @@ namespace Optimizzzer.App.Pages
 
         private CancellationTokenSource _cts;
         private (Action<double, string> Update, StackPanel Log) _applyUi;
+        // Kept outside the view: the page can be rebuilt mid-apply (language, theme, undo elsewhere) and must show the same progress.
+        private double _applyFraction;
+        private string _applyStatus;
+        private readonly List<(Tweak Tweak, JournalEntry Entry)> _applyLog = new List<(Tweak, JournalEntry)>();
         /// <summary>Tweaks that were selected but not attempted because the user pressed Stop.</summary>
         private int _notAttempted;
         private bool _applyRunning;
@@ -567,13 +582,21 @@ namespace Optimizzzer.App.Pages
             if (_applyRunning) return;
             _applyRunning = true;
             var tweaks = SelectedTweaks();
-            var (update, log) = _applyUi;
+            _cts = new CancellationTokenSource();
+            _applyLog.Clear();
+            _applyFraction = 0;
+            _applyStatus = null;
             // Created on the UI thread, so its callbacks run on the UI thread.
             var progress = new Progress<ApplyProgress>(p =>
             {
-                update(p.Done / (double)Math.Max(1, p.Total),
-                    p.LastEntry == null ? Loc.S("Aplicando: ", "Applying: ") + Loc.S(p.Current.Title) + " (" + (p.Done + 1) + Loc.S(" de ", " of ") + p.Total + ")" : null);
-                if (p.LastEntry != null) log.Children.Add(LogLine(p.Current, p.LastEntry));
+                _applyFraction = p.Done / (double)Math.Max(1, p.Total);
+                if (p.LastEntry == null) _applyStatus = Loc.S("Aplicando: ", "Applying: ") + Loc.S(p.Current.Title) + " (" + (p.Done + 1) + Loc.S(" de ", " of ") + p.Total + ")";
+                _applyUi.Update?.Invoke(_applyFraction, p.LastEntry == null ? _applyStatus : null);
+                if (p.LastEntry != null)
+                {
+                    _applyLog.Add((p.Current, p.LastEntry));
+                    _applyUi.Log?.Children.Add(LogLine(p.Current, p.LastEntry));
+                }
             });
             var options = new ApplyOptions { CreateRestorePoint = S.CreateRestorePoint, RestorePointName = "Optimizzzer " + DateTime.Now.ToString("g") };
             var token = _cts.Token;
@@ -600,6 +623,7 @@ namespace Optimizzzer.App.Pages
                 foreach (var t in tweaks.Where(t => !attempted.Contains(t.Id))) S.Selected.Add(t.Id);
                 W.InvalidateScanViews(except: this);
                 GoTo(Step.Done);
+                ToastResult(S.LastSession);
             }
             catch (Exception ex)
             {
@@ -616,8 +640,12 @@ namespace Optimizzzer.App.Pages
                 : Loc.S("Preparando…", "Preparing…"));
             var log = new StackPanel { Margin = new Thickness(0, 20, 0, 0) };
             AutomationProperties.SetLiveSetting(log, AutomationLiveSetting.Polite);
-            _cts = new CancellationTokenSource();
-            var stop = Ui.Secondary(Loc.S("Detener tras el cambio actual", "Stop after the current change"), () => _cts.Cancel(), Icons.Stop);
+            var stop = Ui.Secondary(Loc.S("Detener tras el cambio actual", "Stop after the current change"), () => _cts?.Cancel(), Icons.Stop);
+            if (_applyRunning)
+            {
+                if (_applyStatus != null) update(_applyFraction, _applyStatus);
+                foreach (var (t, e) in _applyLog) log.Children.Add(LogLine(t, e));
+            }
 
             _applyUi = (update, log);
             return StepFrame(_level != null ? Loc.S("Aplicando el nivel ", "Applying level ") + Loc.S(_level.Name) : Loc.S("Aplicando cambios", "Applying changes"),
@@ -713,9 +741,19 @@ namespace Optimizzzer.App.Pages
             string heading = failed == 0
                 ? (_level != null ? Loc.S("Nivel ", "Level ") + Loc.S(_level.Name) + Loc.S(" aplicado", " applied") : Loc.S("Listo", "Done"))
                 : Loc.S("Terminado con avisos", "Finished with warnings");
+            return StepFrame(heading, null, Ui.Stack(0, mark, summary, actions, measures), footer);
+        }
+
+        /// <summary>Shown once when an apply ends, never when the result screen is redrawn later.</summary>
+        private void ToastResult(JournalSession s)
+        {
+            int ok = s.Entries.Count(e => e.ResultKind == EntryResult.Applied);
+            int failed = s.Entries.Count(e => e.ResultKind == EntryResult.Failed);
+            var restart = s.Entries.Where(e => e.ResultKind == EntryResult.Applied)
+                .Select(e => S.Catalog.FirstOrDefault(t => t.Id == e.TweakId)).Where(t => t != null)
+                .Select(t => t.Restart).DefaultIfEmpty(RestartKind.None).Max();
             if (failed == 0) W.Toast(ToastKind.Success, ok + Loc.S(" cambios aplicados.", " changes applied.") + (restart >= RestartKind.SignOut ? " " + Loc.S("Reinicia para verlos todos.", "Restart to see them all.") : ""));
             else W.Toast(ToastKind.Error, failed + Loc.S(" cambios fallaron y se revirtieron solos.", " changes failed and were rolled back."), Loc.S("Ver en Historial", "See in History"), () => W.Navigate("history"));
-            return StepFrame(heading, null, Ui.Stack(0, mark, summary, actions, measures), footer);
         }
 
         private void SaveReport()

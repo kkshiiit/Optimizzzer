@@ -193,6 +193,8 @@ namespace Optimizzzer.Tests
             Assert.False(GpuNames.IsDedicatedAmd("AMD Radeon(TM) Graphics"));
             Assert.False(GpuNames.IsDedicatedAmd("AMD Radeon Graphics"));
             Assert.False(GpuNames.IsDedicatedAmd("Radeon(TM) Vega 8 Graphics"));
+            Assert.False(GpuNames.IsDedicatedAmd("AMD Radeon 780M Graphics"));
+            Assert.False(GpuNames.IsDedicatedAmd("AMD Radeon(TM) 890M Graphics"));
             Assert.True(GpuNames.IsDedicatedAmd("AMD Radeon RX 6700 XT"));
             Assert.True(GpuNames.IsDedicatedAmd("Radeon RX 580 Series"));
         }
@@ -286,6 +288,47 @@ namespace Optimizzzer.Tests
             Xunit.Assert.Equal(Optimizzzer.Core.TweakStatus.NotApplicable, engine.Detect(t));
             // A new engine (next app start) remembers it from the journal.
             Xunit.Assert.Equal(Optimizzzer.Core.TweakStatus.NotApplicable, new Optimizzzer.Core.TweakEngine(sys.Context, store).Detect(t));
+        }
+    }
+
+    public class ReauditTests
+    {
+        [Fact]
+        public void Ultimate_plan_undo_works_when_the_previous_plan_was_unknown()
+        {
+            var sys = new FakeSystem().WithDefaults(TweakCatalog.All);
+            sys.Process.ActiveScheme = "";
+            var engine = new TweakEngine(sys.Context, new MemoryJournalStore());
+            engine.Apply(new[] { TweakCatalog.Find("power.ultimate") }, new ApplyOptions());
+            var r = engine.Undo("power.ultimate", TweakCatalog.All.ToList());
+            Assert.Empty(r.Failed);
+            Assert.DoesNotContain("b6a1d7e2-3c4f-4a5b-9e8d-7f6a5b4c3d2e", sys.Process.Schemes);
+            Assert.Equal("381b4222-f694-41f0-9685-ff5bb260df2e", sys.Process.ActiveScheme);
+        }
+
+        [Fact]
+        public async System.Threading.Tasks.Task Loading_history_while_saving_never_loses_a_session()
+        {
+            var dir = Path.Combine(Path.GetTempPath(), "optz-" + Guid.NewGuid().ToString("N"));
+            try
+            {
+                var store = new FileJournalStore(dir);
+                var session = new JournalSession { Id = "race", StartedUtc = "2026-11-20T00:00:00Z" };
+                var stop = false;
+                var reader = System.Threading.Tasks.Task.Run(() => { while (!System.Threading.Volatile.Read(ref stop)) store.LoadAll(); });
+                for (int i = 0; i < 300; i++) store.Save(session);
+                System.Threading.Volatile.Write(ref stop, true);
+                await reader;
+                Assert.Single(store.LoadAll());
+            }
+            finally { if (Directory.Exists(dir)) Directory.Delete(dir, true); }
+        }
+
+        [Fact]
+        public void Windows_update_reset_reports_services_that_do_not_start()
+        {
+            var wu = RepairCatalog.All.First(t => t.Id == "windowsUpdate");
+            Assert.All(wu.CleanupSteps, s => Assert.False(s.TolerateExitCode));
         }
     }
 }

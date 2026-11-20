@@ -119,7 +119,10 @@ namespace Optimizzzer.Tests
                 case "/list": return new ProcessResult(0, string.Join("\n", Schemes), "");
                 case "-duplicatescheme": Schemes.Add(a[2]); return new ProcessResult(0, "", "");
                 case "/setactive": ActiveScheme = a[1]; return new ProcessResult(0, "", "");
-                case "/delete": Schemes.Remove(a[1]); return new ProcessResult(0, "", "");
+                case "/delete":
+                    // Like Windows: the active plan cannot be deleted.
+                    if (string.Equals(a[1], ActiveScheme, StringComparison.OrdinalIgnoreCase)) return new ProcessResult(1, "", "active");
+                    Schemes.Remove(a[1]); return new ProcessResult(0, "", "");
                 case "/hibernate":
                     Registry?.SetValue(Hive.LocalMachine, @"SYSTEM\CurrentControlSet\Control\Power", "HibernateEnabled", RegValue.DWord(a[1] == "on" ? 1 : 0));
                     return new ProcessResult(0, "", "");

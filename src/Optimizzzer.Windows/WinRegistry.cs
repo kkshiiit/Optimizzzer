@@ -94,8 +94,16 @@ namespace Optimizzzer.Windows
             using (var root = Root(hive)) root.DeleteSubKeyTree(path, false);
         }
 
+        private static readonly Lazy<bool> Elevated = new Lazy<bool>(() =>
+        {
+            using (var id = System.Security.Principal.WindowsIdentity.GetCurrent())
+                return new System.Security.Principal.WindowsPrincipal(id).IsInRole(System.Security.Principal.WindowsBuiltInRole.Administrator);
+        });
+
         public bool CanWrite(Hive hive, string path)
         {
+            // Without elevation every HKLM key refuses writes; that is not Windows protecting the setting.
+            if (!Elevated.Value) return true;
             try
             {
                 using (var root = Root(hive))

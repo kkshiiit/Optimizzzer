@@ -98,9 +98,12 @@ namespace Optimizzzer.Windows
             var backups = LoadBackup();
             var remaining = new List<DnsBackup>();
             var errors = new List<string>();
+            var present = NetworkInterface.GetAllNetworkInterfaces();
             foreach (var b in backups)
             {
-                var name = NetworkInterface.GetAllNetworkInterfaces().FirstOrDefault(n => n.Id == b.AdapterId)?.Name ?? b.AdapterName;
+                // An adapter that was removed has no DNS to restore; keeping its entry would make every restore fail.
+                var name = present.FirstOrDefault(n => n.Id == b.AdapterId)?.Name;
+                if (name == null) continue;
                 try
                 {
                     if (b.Automatic) Run("interface ipv4 set dnsservers name=\"" + name + "\" source=dhcp", true);

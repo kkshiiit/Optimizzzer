@@ -84,6 +84,7 @@ namespace Optimizzzer.App.Pages
                     {
                         var code = await Task.Run(() => S.Win.Process.RunStreaming(Environment.ExpandEnvironmentVariables(step.File), step.Args, Append, CancellationToken.None));
                         Append(Loc.S("Código de salida: ", "Exit code: ") + code);
+                        if (code != 0 && !step.TolerateExitCode) ok = false;
                     }
                     catch (Exception ex) { Append(ex.Message); ok = false; }
                 }

@@ -74,11 +74,12 @@ namespace Optimizzzer.Core.Tools
                     new RepairStep("cmd.exe", "/c if exist %SystemRoot%\\System32\\catroot2.old rd /s /q %SystemRoot%\\System32\\catroot2.old", tolerateExitCode: true),
                     new RepairStep("cmd.exe", "/c ren %SystemRoot%\\System32\\catroot2 catroot2.old"),
                 },
+                // Already running counts as success; any other failure to start is reported, so "Finished" is never shown with the service stopped.
                 CleanupSteps =
                 {
-                    new RepairStep("net.exe", "start cryptsvc", tolerateExitCode: true),
-                    new RepairStep("net.exe", "start bits", tolerateExitCode: true),
-                    new RepairStep("net.exe", "start wuauserv", tolerateExitCode: true),
+                    new RepairStep("cmd.exe", "/c sc query cryptsvc | find \"RUNNING\" >nul || net start cryptsvc"),
+                    new RepairStep("cmd.exe", "/c sc query bits | find \"RUNNING\" >nul || net start bits"),
+                    new RepairStep("cmd.exe", "/c sc query wuauserv | find \"RUNNING\" >nul || net start wuauserv"),
                 },
             },
             new RepairTask
