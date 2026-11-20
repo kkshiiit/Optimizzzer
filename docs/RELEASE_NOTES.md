@@ -1,4 +1,11 @@
-Primera versión de Optimizzzer: optimizador para Windows 10 y 11. Es un único `Optimizzzer.exe` que no instala nada y pide permisos de administrador al abrirse.
+**Novedades en 1.0.1** (correcciones de la revisión de código):
+- Si un ajuste falla a mitad, también se deshace la parte que llegó a cambiar. Por ejemplo, ya no queda un plan de energía duplicado.
+- Si deshacer un cambio falla, el cambio sigue en Historial para reintentarlo, en vez de darse por deshecho.
+- La desinstalación de OneDrive solo se da por buena si OneDrive desaparece de verdad.
+
+---
+
+Optimizzzer es un optimizador para Windows 10 y 11. Es un único `Optimizzzer.exe` que no instala nada y pide permisos de administrador al abrirse.
 
 **Qué incluye**
 - Asistente paso a paso: análisis, perfil, selección, revisión exacta de cada cambio y aplicar.
