@@ -11,6 +11,7 @@
 - Personalizar: buscador y filtro en una sola fila, y el resto en "Más acciones".
 - Ajustes muestra el nombre del color de acento elegido.
 - Aviso al terminar de reiniciar el Explorador.
+- El tema oscuro es el predeterminado. El claro y el de Windows se eligen en Ajustes.
 
 ---
 

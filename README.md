@@ -26,7 +26,7 @@ Cada nivel incluye los anteriores. Al elegirlo ves en lenguaje simple qué va a 
 - **Avisos claros de éxito y error:** cada error dice qué hacer.
 - **Ayuda:** glosario y recorrido de bienvenida.
 - **Selecciones portátiles:** exporta e importa archivos `.optz` para repetir la configuración en otro PC.
-- **Apariencia:** tema claro/oscuro con 5 colores de acento.
+- **Apariencia:** tema oscuro de serie, con claro o el de Windows a un clic, y 5 colores de acento.
 - **Modo ligero automático:** en equipos modestos se quitan las animaciones y las sombras para que vaya fluido.
 
 **Personalizar (paso a paso)**

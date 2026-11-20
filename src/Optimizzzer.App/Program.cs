@@ -118,7 +118,7 @@ namespace Optimizzzer.App
             Check("first launch scan through the UI", () =>
             {
                 var fresh = new AppState();
-                Theme.Configure(ThemeChoice.System, AccentChoice.System, LiteChoice.Auto);
+                Theme.Configure(fresh.SavedTheme, AccentChoice.System, LiteChoice.Auto);
                 log.AppendLine("  lite mode: " + Theme.Lite + (Theme.LiteReason.Length > 0 ? " (" + Theme.LiteReason + ")" : "") + ", render tier " + (System.Windows.Media.RenderCapability.Tier >> 16));
                 // Time to a visible window: what a user on a slow PC waits before seeing anything.
                 var clock = System.Diagnostics.Stopwatch.StartNew();

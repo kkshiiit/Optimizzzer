@@ -20,7 +20,7 @@ namespace Optimizzzer.App.Shell
     /// </summary>
     public static class Theme
     {
-        public static ThemeChoice Choice { get; private set; } = ThemeChoice.System;
+        public static ThemeChoice Choice { get; private set; } = ThemeChoice.Dark;
         public static AccentChoice Accent { get; private set; } = AccentChoice.System;
         public static LiteChoice LiteSetting { get; private set; } = LiteChoice.Auto;
         public static bool IsDark { get; private set; }

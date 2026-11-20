@@ -129,7 +129,8 @@ namespace Optimizzzer.App.Shell
             catch (Exception) { }
         }
 
-        public ThemeChoice SavedTheme { get; private set; } = ThemeChoice.System;
+        // Dark by default (owner's choice); Light and System stay one click away in Settings.
+        public ThemeChoice SavedTheme { get; private set; } = ThemeChoice.Dark;
         public AccentChoice SavedAccent { get; private set; } = AccentChoice.System;
         public LiteChoice SavedLite { get; private set; } = LiteChoice.Auto;
         public bool TourDone { get; set; }

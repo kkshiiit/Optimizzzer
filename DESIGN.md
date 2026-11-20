@@ -15,7 +15,7 @@ Design Read: a Windows desktop utility for people tuning their own PC (from begi
 | Icons | Segoe Fluent Icons with Segoe MDL2 Assets as the fallback; glyphs only | The font is built into Windows, renders crisply at any DPI, and each glyph maps to the concept it labels. |
 | Palette | Neutrals plus one accent (the user's Windows accent color, adjusted at runtime until it passes AA) | Using the system accent makes the app feel native and avoids inventing a brand that does not exist. |
 | Status colors | Amber = Moderate, red = Advanced, green = Applied. Always paired with an icon and a word. | Risk is the most important signal in an optimizer, and it is never shown by color alone. |
-| Theme | Follows the Windows light/dark setting, with a manual toggle; both themes are fully styled | People expect a system tool to match the OS; neither mode is a lesser one. |
+| Theme | Dark by default (owner's choice), with Light and System (follows Windows) one click away in Settings; both themes are fully styled | The owner wants a dark tool out of the box; neither mode is a lesser one. |
 | Layout | Left navigation rail (Wizard, then Tools), content on the right, one primary action per screen at the bottom right | One focal point per screen; the same place for "next" every time builds muscle memory. |
 | Lists | Flat rows with dividers, not cards | Tweaks are a long, scannable list, and rows show more of them at once while scrolling faster. |
 | Radius | 4 px for controls, 8 px for panels | This is the Windows 11 convention: varied, not pill-shaped. |
