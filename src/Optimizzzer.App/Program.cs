@@ -23,6 +23,8 @@ namespace Optimizzzer.App
         {
             // Must be set before any WPF type loads: lets WPF re-render crisply when moved between monitors with different scaling.
             AppContext.SetSwitch("Switch.System.Windows.DoNotScaleForDpiChanges", false);
+            // The exe usually runs from Downloads: never load a DLL placed next to it, only from System32.
+            Optimizzzer.Windows.SafeFolders.RestrictDllSearch();
 
             var cli = CliOptions.Parse(args);
             if (cli.Lang.HasValue) { Loc.Lang = cli.Lang.Value; AppState.LanguageFromCommandLine = true; }
@@ -209,9 +211,11 @@ namespace Optimizzzer.App
                         Pump();
                         foreach (var level in new[] { Level.Quick, Level.Maximum })
                         {
-                            w.PageOf<Pages.HomePage>().OpenLevel(level);
-                            if (w.OverlayOpen) { Verify("level sheet " + level); w.CloseOverlay(); }
+                            var levels = w.PageOf<Pages.LevelsPage>();
+                            levels.OpenLevel(level);
+                            if (levels.ShowingPreviewForTest) Verify("level sheet " + level);
                             else log.AppendLine("  level " + level + ": nothing to apply here");
+                            levels.CloseForTest();
                         }
                         w.ShowPalette();
                         if (!w.OverlayOpen) throw new Exception("Ctrl+K palette did not open");
@@ -242,20 +246,22 @@ namespace Optimizzzer.App
                     var name = "Size-" + width + "x" + height;
                     log.AppendLine("  " + name + ": compact menu " + MainWindow.Compact);
                     SelfTestTools.Screenshot(w, name + "-home");
-                    var home = w.PageOf<Pages.HomePage>();
-                    home.OpenLevel(Level.Maximum);
-                    if (w.OverlayOpen)
+                    var levelsPage = w.PageOf<Pages.LevelsPage>();
+                    w.Navigate("levels");
+                    Pump(); Pump();
+                    SelfTestTools.Screenshot(w, name + "-levels");
+                    levelsPage.OpenLevel(Level.Maximum);
+                    if (levelsPage.ShowingPreviewForTest)
                     {
-                        home.SheetDetailsForTest.RaiseEvent(new RoutedEventArgs(System.Windows.Controls.Primitives.ButtonBase.ClickEvent));
                         Pump(); Pump(); Pump();
                         w.UpdateLayout();
                         var root = (FrameworkElement)w.Content;
-                        var apply = home.SheetApplyForTest;
+                        var apply = levelsPage.ApplyForTest;
                         var box = apply.TransformToAncestor(root).TransformBounds(new Rect(apply.RenderSize));
                         if (box.Bottom > root.ActualHeight + 0.5 || box.Right > root.ActualWidth + 0.5 || box.Top < 0)
                             throw new Exception(name + ": the Apply button is outside the window (" + box + " in " + root.ActualWidth + "x" + root.ActualHeight + ")");
                         SelfTestTools.Screenshot(w, name + "-level-sheet-Maximum");
-                        w.CloseOverlay();
+                        levelsPage.CloseForTest();
                     }
                     w.Navigate("wizard");
                     Pump(); Pump();

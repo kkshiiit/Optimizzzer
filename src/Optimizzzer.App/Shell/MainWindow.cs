@@ -63,6 +63,7 @@ namespace Optimizzzer.App.Shell
             FontSize = 14;
 
             _pages.Add(new HomePage(state, this));
+            _pages.Add(new LevelsPage(state, this));
             _pages.Add(new WizardPage(state, this));
             _pages.Add(new CleanupPage(state, this));
             _pages.Add(new RepairPage(state, this));
@@ -456,7 +457,7 @@ namespace Optimizzzer.App.Shell
         /// <summary>Pages that show tweak status are rebuilt after anything changed the system.</summary>
         public void InvalidateScanViews(AppPage except = null)
         {
-            foreach (var p in _pages.Where(p => (p is HomePage || p is WizardPage) && p != except))
+            foreach (var p in _pages.Where(p => (p is HomePage || p is WizardPage || p is LevelsPage) && p != except))
             {
                 p.Invalidate();
                 if (p == _current) { ShowView(p.View); p.OnShown(); }
@@ -678,7 +679,7 @@ namespace Optimizzzer.App.Shell
             foreach (var p in _pages)
                 list.Add(new Command { Icon = p.Icon, Title = p.Title, Subtitle = Loc.S("Ir a la página", "Go to page"), Run = () => Navigate(p.Key) });
             foreach (var l in Levels.All)
-                list.Add(new Command { Icon = Icons.Play, Title = Loc.S("Aplicar el nivel " + l.Name.Es, "Apply the " + l.Name.En + " level"), Subtitle = Loc.S(l.Tagline), Run = () => { Navigate("home"); PageOf<HomePage>().OpenLevel(l.Level); } });
+                list.Add(new Command { Icon = Icons.Play, Title = Loc.S("Aplicar el nivel " + l.Name.Es, "Apply the " + l.Name.En + " level"), Subtitle = Loc.S(l.Tagline), Run = () => PageOf<LevelsPage>().OpenLevel(l.Level) });
             list.Add(new Command { Icon = Icons.Undo, Title = Loc.S("Deshacer la última sesión", "Undo the last session"), Subtitle = Loc.S("Historial", "History"), Run = () => { Navigate("home"); PageOf<HomePage>().UndoLast(); } });
             list.Add(new Command { Icon = Icons.FullScreen, Title = Loc.S("Pantalla completa", "Full screen"), Subtitle = "F11", Run = ToggleFullScreen });
             list.Add(new Command { Icon = Icons.Menu, Title = Loc.S("Contraer o expandir el menú", "Collapse or expand the menu"), Subtitle = Loc.S("Más espacio para el contenido", "More room for content"), Run = ToggleNavCollapsed });

@@ -91,7 +91,7 @@ namespace Optimizzzer.App.Pages
             var tour = Ui.Secondary(Loc.S("Ver el recorrido", "Show the tour"), W.ShowTour, Icons.Play);
             var data = Ui.Secondary(Loc.S("Abrir carpeta", "Open folder"), () =>
             {
-                try { System.IO.Directory.CreateDirectory(S.Win.DataDir); System.Diagnostics.Process.Start("explorer.exe", "\"" + S.Win.DataDir + "\""); }
+                try { System.IO.Directory.CreateDirectory(S.Win.DataDir); Launcher.Open(S.Win.DataDir); }
                 catch (Exception ex) { W.ShowError(ex.Message); }
             }, Icons.Folder);
 

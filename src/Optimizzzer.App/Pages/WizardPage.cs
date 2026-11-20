@@ -801,7 +801,7 @@ namespace Optimizzzer.App.Pages
             {
                 var html = HtmlReport.Build(Loc.Lang, S.Ctx.Info, S.LastSession, S.Catalog.ToList(), S.Before, S.After, DateTime.Now);
                 File.WriteAllText(dlg.FileName, html, new System.Text.UTF8Encoding(false));
-                System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo(dlg.FileName) { UseShellExecute = true });
+                Launcher.Open(dlg.FileName); // the HTML report opens in the browser without admin rights
             }
             catch (Exception ex) { W.ShowError(ex.Message); }
         }

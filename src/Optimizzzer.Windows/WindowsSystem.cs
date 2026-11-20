@@ -15,6 +15,8 @@ namespace Optimizzzer.Windows
         public WindowsSystem()
         {
             DataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.CommonApplicationData), "Optimizzzer");
+            // The journal and .reg backups are restored with admin rights later, so only admins may write them.
+            SafeFolders.LockToAdmins(DataDir);
             Registry = new WinRegistry();
             Process = new WinProcess();
             Services = new WinServices(Registry, Process);

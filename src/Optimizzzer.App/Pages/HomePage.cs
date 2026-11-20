@@ -21,6 +21,7 @@ namespace Optimizzzer.App.Pages
         private IList<Tweak> _drift;
         private JournalSession _last;
         private Health _health;
+        private Optimizzzer.Windows.HardwareReport _hw;
 
         /// <summary>Facts read from this PC for the health card. Null fields could not be read and are not shown.</summary>
         private sealed class Health
@@ -66,6 +67,69 @@ namespace Optimizzzer.App.Pages
             }
             catch (Exception) { }
             return h;
+        }
+
+        /// <summary>
+        /// "Your PC": one tile per component with a large icon, read from Windows (never estimated). The screen tile says
+        /// when the monitor runs below the refresh rate it supports, which is a real, free improvement.
+        /// </summary>
+        private FrameworkElement HardwareCards()
+        {
+            var wrap = new WrapPanel();
+            var hw = _hw;
+            var info = S.Ctx.Info;
+            void Tile(string icon, string title, string main, string detail, string note = null, string noteBrush = "FgMuted", Action noteAction = null, string actionText = null)
+            {
+                if (string.IsNullOrWhiteSpace(main)) return;
+                var ic = Ui.Icon(icon, 26, "AccentText");
+                ic.HorizontalAlignment = HorizontalAlignment.Left;
+                ic.Margin = new Thickness(0, 0, 0, 10);
+                var stack = Ui.Stack(2, ic, Ui.Muted(title, 13), Ui.Text(main, 15, true), string.IsNullOrWhiteSpace(detail) ? null : Ui.Muted(detail, 13));
+                if (note != null)
+                {
+                    var n = Ui.Text(note, 13, false, noteBrush);
+                    n.Margin = new Thickness(0, 8, 0, 0);
+                    stack.Children.Add(n);
+                    if (noteAction != null)
+                    {
+                        var b = Ui.Subtle(actionText, noteAction);
+                        b.SetResourceReference(Control.ForegroundProperty, "AccentText");
+                        b.HorizontalAlignment = HorizontalAlignment.Left; b.Padding = new Thickness(0); b.MinHeight = 28;
+                        stack.Children.Add(b);
+                    }
+                }
+                var card = Ui.Panel(stack, 18);
+                card.Width = MainWindow.Compact ? 230 : 250;
+                card.Margin = new Thickness(0, 0, 12, 12);
+                AutomationProperties.SetName(card, title + ": " + main);
+                wrap.Children.Add(card);
+            }
+            string Gb(long? b) => b.HasValue && b > 0 ? Loc.N(b.Value / 1073741824.0, b.Value >= 10L * 1073741824 ? "N0" : "N1") + " GB" : null;
+
+            Tile(Icons.Processor, Loc.S("Procesador", "Processor"), Short(hw?.Cpu ?? info.CpuName),
+                hw?.Cores > 0 ? hw.Cores + Loc.S(" núcleos · ", " cores · ") + hw.Threads + Loc.S(" hilos", " threads") + (hw.CpuMaxMhz > 0 ? " · " + Loc.N(hw.CpuMaxMhz.Value / 1000.0, "N1") + " GHz" : "") : null);
+            if (hw != null && hw.Gpus.Count > 0)
+                foreach (var g in hw.Gpus)
+                    Tile(Icons.Gaming, Loc.S("Gráfica", "Graphics"), g.Name, g.MemoryBytes > 0 ? Gb(g.MemoryBytes) + Loc.S(" de memoria propia", " of its own memory") : null);
+            else Tile(Icons.Gaming, Loc.S("Gráfica", "Graphics"), string.Join(", ", info.Gpus), null);
+            Tile(Icons.Memory, Loc.S("Memoria RAM", "Memory (RAM)"), Gb(hw?.RamBytes) ?? (info.TotalMemoryMb > 0 ? Loc.N(info.TotalMemoryMb / 1024.0, "N0") + " GB" : null),
+                hw == null ? null : string.Join(" · ", new[] { hw.RamMhz > 0 ? hw.RamMhz + " MHz" : null, hw.RamModules > 0 ? hw.RamModules + Loc.S(" módulos", " modules") : null }.Where(x => x != null)),
+                hw?.RamModules == 1 ? Loc.S("Un solo módulo: con dos iguales la memoria trabaja en doble canal y rinde más en juegos.", "A single module: with two matching ones memory runs in dual channel and games perform better.") : null);
+            if (hw != null)
+                foreach (var d in hw.Disks)
+                    Tile(Icons.Disk, Loc.S("Disco", "Drive"), d.Name, string.Join(" · ", new[] { d.Kind, Gb(d.Bytes) }.Where(x => x != null)),
+                        d.Kind == "HDD" ? Loc.S("Disco mecánico: un SSD hace que Windows y los juegos carguen varias veces más rápido.", "Hard drive: an SSD makes Windows and games load several times faster.") : null, "Moderate");
+            if (hw?.DisplayWidth > 0)
+            {
+                bool below = hw.DisplayMaxHz > hw.DisplayHz;
+                Tile(Icons.Display, Loc.S("Pantalla", "Display"), hw.DisplayWidth + " × " + hw.DisplayHeight, hw.DisplayHz + " Hz",
+                    below ? Loc.S("Tu pantalla admite ", "Your display supports ") + hw.DisplayMaxHz + Loc.S(" Hz y va a ", " Hz and runs at ") + hw.DisplayHz + Loc.S(" Hz. Subirla es gratis y se nota al jugar.", " Hz. Raising it is free and noticeable in games.") : null,
+                    "Moderate", below ? (Action)(() => Launcher.Open("ms-settings:display-advanced")) : null, Loc.S("Cambiar la frecuencia", "Change the refresh rate"));
+            }
+            Tile(Icons.Board, Loc.S("Placa base", "Motherboard"), hw?.Board, null);
+            Tile(Icons.Windows, "Windows", hw?.Windows ?? (info.ProductName + " " + info.DisplayVersion), Loc.S("Compilación ", "Build ") + info.Build + "." + info.Ubr);
+            if (hw == null) wrap.Children.Add(Ui.Muted(Loc.S("Leyendo los componentes…", "Reading the components…"), 13));
+            return wrap;
         }
 
         /// <summary>The health card: measured facts, each with what to do when it needs attention.</summary>
@@ -129,7 +193,7 @@ namespace Optimizzzer.App.Pages
                 else
                     Line(Icons.CheckCircle, "Success", Loc.S("Ningún ajuste fue revertido por Windows.", "No tweak was reverted by Windows."));
             }
-            var panel = Ui.Panel(Ui.Stack(8, Ui.H2(Loc.S("Salud del equipo", "PC health")), rows), 20);
+            var panel = Ui.Panel(rows, 20);
             panel.Margin = new Thickness(0, 0, 0, 8);
             return panel;
         }
@@ -147,7 +211,8 @@ namespace Optimizzzer.App.Pages
                         && (catalog.FirstOrDefault(t => t.Id == e.TweakId)?.Reversible ?? true))).LastOrDefault();
                     return (l, S.Engine.FindDrift(catalog), ReadHealth());
                 });
-                bool changed = (last?.Id != _last?.Id) || (drift.Count != (_drift?.Count ?? 0)) || _health == null;
+                if (_hw == null) _hw = await Task.Run(() => Optimizzzer.Windows.WinHardware.Read());
+                bool changed = (last?.Id != _last?.Id) || (drift.Count != (_drift?.Count ?? 0)) || _health == null || _hw != null;
                 _last = last; _drift = drift; _health = health;
                 if (changed) W.RefreshCurrentIf(this);
             }
@@ -165,10 +230,6 @@ namespace Optimizzzer.App.Pages
                 return Frame(Loc.S("Solo se lee: no se cambia nada sin tu confirmación.", "Read only: nothing changes without your confirmation."), Ui.Stack(16, view, Ui.ScanDurationNote()));
             }
 
-            var info = S.Ctx.Info;
-            var gpu = info.Gpus.FirstOrDefault();
-            var pc = string.Join(" · ", new[] { info.ProductName + " " + info.DisplayVersion, Short(info.CpuName),
-                info.TotalMemoryMb > 0 ? Loc.N(info.TotalMemoryMb / 1024.0, "N0") + " GB RAM" : null, gpu }.Where(x => !string.IsNullOrWhiteSpace(x)));
 
             var body = new StackPanel();
 
@@ -182,25 +243,19 @@ namespace Optimizzzer.App.Pages
                     Loc.S("Deshacer", "Undo"), UndoLast));
             }
 
+            body.Children.Add(Ui.H2(Loc.S("Tu equipo", "Your PC")));
+            body.Children.Add(HardwareCards());
+            var healthHead = Ui.H2(Loc.S("Salud del equipo", "PC health"));
+            healthHead.Margin = new Thickness(0, 20, 0, 8);
+            body.Children.Add(healthHead);
             body.Children.Add(HealthCard());
 
-            var heading = Ui.H2(Loc.S("Elige un nivel", "Pick a level"));
-            heading.Margin = new Thickness(0, body.Children.Count > 0 ? 12 : 0, 0, 4);
-            body.Children.Add(heading);
-            body.Children.Add(Ui.Muted(Loc.S("Cada nivel incluye los anteriores. Antes de aplicar verás exactamente qué cambia. Los ajustes se pueden deshacer; las apps quitadas se reinstalan desde la Store.",
-                "Each level includes the ones before. Before applying you see exactly what changes. Settings can be undone; removed apps are reinstalled from the Store.")));
-
-            var cards = new WrapPanel { Margin = new Thickness(0, 16, 0, 0) };
-            foreach (var l in Levels.All) cards.Children.Add(LevelCard(l));
-            body.Children.Add(cards);
-
-            var custom = Ui.Secondary(Loc.S("Personalizar ajuste por ajuste", "Customize tweak by tweak"), () => W.Navigate("wizard"), Icons.Wizard);
-            custom.HorizontalAlignment = HorizontalAlignment.Left;
-            custom.Margin = new Thickness(0, 8, 0, 0);
-            body.Children.Add(custom);
-
-            var frame = Frame(pc, body);
-            return frame;
+            var go = Ui.Primary(Loc.S("Optimizar con un nivel", "Optimize with a level"), () => W.Navigate("levels"), Icons.SpeedMedium);
+            var custom = Ui.Secondary(Loc.S("Elegir ajuste por ajuste", "Pick tweak by tweak"), () => W.Navigate("wizard"), Icons.Wizard);
+            var actions = Ui.Row(8, go, custom);
+            actions.Margin = new Thickness(0, 16, 0, 0);
+            body.Children.Add(actions);
+            return Frame(null, body);
         }
 
         private static string Short(string cpu) =>
@@ -221,135 +276,6 @@ namespace Optimizzzer.App.Pages
             var bar = new Border { Child = g, Padding = new Thickness(16, 10, 12, 10), CornerRadius = new CornerRadius(8), Margin = new Thickness(0, 0, 0, 8) };
             bar.SetResourceReference(Border.BackgroundProperty, "SurfaceAlt");
             return bar;
-        }
-
-        /// <summary>A level card: what it is, how much of it this PC already has, and how many changes are left.</summary>
-        private FrameworkElement LevelCard(LevelInfo l)
-        {
-            var pending = Levels.Select(S.ScanResults, l.Level, S.Ctx.Info);
-            var (applied, total) = Levels.Progress(S.ScanResults, l.Level);
-
-            var steps = new StackPanel { Orientation = Orientation.Horizontal, Margin = new Thickness(0, 0, 0, 12) };
-            for (int i = 1; i <= 4; i++)
-            {
-                var bar = new Border { Width = 18, Height = 4, CornerRadius = new CornerRadius(2), Margin = new Thickness(0, 0, 4, 0) };
-                bar.SetResourceReference(Border.BackgroundProperty, i <= (int)l.Level ? "AccentText" : "Divider");
-                steps.Children.Add(bar);
-            }
-            AutomationProperties.SetName(steps, Loc.S("Nivel ", "Level ") + (int)l.Level + Loc.S(" de 4", " of 4"));
-
-            var progress = new ProgressBar { Minimum = 0, Maximum = Math.Max(1, total), Value = 0, Margin = new Thickness(0, 6, 0, 0) };
-            progress.SetResourceReference(Control.BackgroundProperty, "Divider"); // the card is SurfaceAlt, so the track needs its own tone
-            Theme.AnimateValue(progress, applied);
-            var status = pending.Count == 0
-                ? Ui.Text(Loc.S("Todo aplicado", "All applied"), 12, true, "Success", wrap: false)
-                : Ui.Text(pending.Count + (pending.Count == 1 ? Loc.S(" cambio pendiente", " change left") : Loc.S(" cambios pendientes", " changes left")), 12, true, "AccentText", wrap: false);
-            var done = Ui.Muted(applied + Loc.S(" de ", " of ") + total + Loc.S(" ya aplicados en este equipo", " already applied on this PC"), 12);
-
-            var title = Ui.Row(10, Ui.Icon(Icons.For(l.Level), 20, "AccentText"), Ui.Text(Loc.S(l.Name), 16, true, "Fg"));
-            var content = Ui.Stack(0, steps, title, Ui.Muted(Loc.S(l.Tagline)), status, progress, done,
-                l.NeedsSecondConfirmation ? Ui.Text(Loc.S("Incluye cambios moderados: lee qué pierdes.", "Includes moderate changes: read what you lose."), 12, false, "Moderate") : null);
-            ((FrameworkElement)content.Children[2]).Margin = new Thickness(0, 4, 0, 12);
-
-            var b = new Button { Content = content, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top };
-            b.SetResourceReference(FrameworkElement.StyleProperty, "CardButton");
-            b.Width = 300; // two per row on a 1024 px window, so titles such as "Maximum performance" fit
-            b.Margin = new Thickness(0, 0, 12, 12);
-            AutomationProperties.SetName(b, Loc.S(l.Name) + ". " + Loc.S(l.Tagline) + " " + status.Text);
-            b.Click += (_, __) => OpenLevel(l.Level);
-            return b;
-        }
-
-        // ---------- The confirmation sheet ----------
-
-        /// <summary>Self-test only: the last level sheet's buttons, to check they stay on screen at any size.</summary>
-        public Button SheetApplyForTest { get; private set; }
-        public Button SheetDetailsForTest { get; private set; }
-
-        public void OpenLevel(Level level)
-        {
-            if (S.ScanResults == null) { W.Toast(ToastKind.Info, Loc.S("Espera a que termine el análisis.", "Wait for the scan to finish.")); return; }
-            var l = Levels.Get(level);
-            var tweaks = Levels.Select(S.ScanResults, level, S.Ctx.Info);
-            if (tweaks.Count == 0)
-            {
-                W.Toast(ToastKind.Success, Loc.S("Todo lo del nivel ", "Everything in ") + Loc.S(l.Name) + Loc.S(" ya está aplicado en este equipo.", " is already applied on this PC."));
-                return;
-            }
-
-            bool restorePoint = true;
-            var losses = tweaks.Where(t => t.Downside.Es.Length > 0).ToList();
-            var restart = tweaks.Select(t => t.Restart).DefaultIfEmpty(RestartKind.None).Max();
-            int uninstalls = tweaks.Count(t => !t.Reversible);
-            int moderate = tweaks.Count(t => t.Risk != Risk.Safe);
-
-            var byCategory = string.Join(" · ", tweaks.GroupBy(t => t.Category).Select(g => Names.Of(g.Key) + " " + g.Count()));
-
-            var what = Ui.Stack(10,
-                Ui.Notice(Icons.Info, "AccentText", tweaks.Count + Loc.S(" cambios en este equipo: ", " changes on this PC: ") + byCategory + "."),
-                Ui.Notice(Icons.CheckCircle, "Success", Loc.S("Qué ganas: ", "What you gain: ") + Loc.S(l.Gains)),
-                losses.Count > 0 ? Ui.Notice(Icons.Warning, "Moderate", Loc.S("Qué pierdes: ", "What you lose: ")
-                    + string.Join(" ", losses.Take(3).Select(t => Loc.S(t.Downside)))
-                    + (losses.Count > 3 ? Loc.S(" Y ", " Plus ") + (losses.Count - 3) + Loc.S(" más en el detalle.", " more in the details.") : "")) : null,
-                uninstalls > 0 ? Ui.Notice(Icons.Error, "Advanced", uninstalls == 1
-                    ? Loc.S("1 es una desinstalación de una app preinstalada: no se deshace desde aquí, se reinstala desde la Microsoft Store.",
-                        "1 is an uninstall of a preinstalled app: it is not undone from here, you reinstall it from the Microsoft Store.")
-                    : uninstalls + Loc.S(" son desinstalaciones de apps preinstaladas: no se deshacen desde aquí, se reinstalan desde la Microsoft Store.",
-                        " are uninstalls of preinstalled apps: they are not undone from here, you reinstall them from the Microsoft Store.")) : null,
-                restart != RestartKind.None ? Ui.Notice(Icons.Restart, "FgMuted", Names.Of(restart) + ". " + Loc.S("Duración: ", "Duration: ") + Loc.S(l.Duration) + ".")
-                    : Ui.Notice(Icons.Stopwatch, "FgMuted", Loc.S("Duración: ", "Duration: ") + Loc.S(l.Duration) + "."));
-
-            var rp = new CheckBox { Content = Loc.S("Crear un punto de restauración antes (recomendado)", "Create a restore point first (recommended)"), IsChecked = true };
-            rp.Checked += (_, __) => restorePoint = true;
-            rp.Unchecked += (_, __) => restorePoint = false;
-
-            // The exact list, built only if the user opens it.
-            var detailsHost = new ContentControl { Focusable = false, Visibility = Visibility.Collapsed };
-            var toggle = Ui.Subtle(Loc.S("Ver los ", "See the ") + tweaks.Count + Loc.S(" cambios exactos", " exact changes"), null, Icons.ChevronDown);
-            toggle.HorizontalAlignment = HorizontalAlignment.Left;
-            toggle.Click += (_, __) =>
-            {
-                if (detailsHost.Content == null)
-                {
-                    var list = new StackPanel();
-                    foreach (var t in tweaks)
-                    {
-                        var row = new WrapPanel { Margin = new Thickness(0, 0, 0, 6) };
-                        var name = Ui.Text(Loc.S(t.Title), 14, false, "Fg", wrap: false);
-                        name.Margin = new Thickness(0, 0, 10, 0);
-                        row.Children.Add(name);
-                        row.Children.Add(Ui.RiskMarker(t.Risk));
-                        list.Children.Add(row);
-                    }
-                    // No inner scroll: the sheet body scrolls as a whole, so the buttons below never move off screen.
-                    detailsHost.Content = list;
-                }
-                detailsHost.Visibility = detailsHost.Visibility == Visibility.Visible ? Visibility.Collapsed : Visibility.Visible;
-            };
-
-            var apply = Ui.Primary(Loc.S("Aplicar ", "Apply ") + tweaks.Count + Loc.S(" cambios", " changes"), null, Icons.Check);
-            var cancel = Ui.Secondary(Loc.S("Cancelar", "Cancel"), W.CloseOverlay);
-            apply.Click += async (_, __) =>
-            {
-                W.CloseOverlay();
-                if (l.NeedsSecondConfirmation && !await W.Confirm(
-                        Loc.S("¿Aplicar Máximo rendimiento?", "Apply Maximum performance?"),
-                        moderate + Loc.S(" de estos cambios son de riesgo moderado: quitan funciones como la búsqueda rápida de archivos o la hibernación a cambio de menos trabajo en segundo plano. Podrás deshacerlos desde Historial; las apps quitadas se reinstalan desde la Store.",
-                            " of these changes are moderate risk: they remove features such as fast file search or hibernation in exchange for less background work. You can undo them from History; removed apps are reinstalled from the Store."),
-                        Loc.S("Sí, aplicar", "Yes, apply"), danger: true)) return;
-                W.Navigate("wizard");
-                W.PageOf<WizardPage>().StartLevel(l, tweaks, restorePoint);
-            };
-            var buttons = Ui.Row(8, cancel, apply);
-            buttons.HorizontalAlignment = HorizontalAlignment.Right;
-            SheetApplyForTest = apply;
-            SheetDetailsForTest = toggle;
-
-            var head = Ui.Row(12, Ui.Icon(Icons.For(level), 28, "AccentText"), Ui.Stack(0, Ui.H2(Loc.S("Nivel " + l.Name.Es, l.Name.En + " level")), Ui.Muted(Loc.S(l.Tagline))));
-            var sheet = MainWindow.Sheet(head, Ui.Stack(16, Ui.Text(Loc.S("Qué va a pasar", "What will happen"), 14, true), what, rp, Ui.Stack(4, toggle, detailsHost)), buttons);
-            AutomationProperties.SetName(sheet, Loc.S("Nivel " + l.Name.Es, l.Name.En + " level"));
-            W.ShowOverlay(sheet, W.CloseOverlay, 640);
-            Dispatcher(() => apply.Focus());
         }
 
         private void Dispatcher(Action a) => W.Dispatcher.BeginInvoke(a, System.Windows.Threading.DispatcherPriority.Input);

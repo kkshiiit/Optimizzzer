@@ -15,6 +15,10 @@ namespace Optimizzzer.Core
         /// <summary>What the user gains, in plain words. Never a number: the gain depends on the PC and the game.</summary>
         public Text Gains { get; set; }
         public Text Duration { get; set; }
+        /// <summary>One plain sentence: what this level is for.</summary>
+        public Text What { get; set; }
+        /// <summary>One concrete thing you will notice, different for each level.</summary>
+        public Text Example { get; set; }
         /// <summary>Only the tweaks this level adds on top of the one below.</summary>
         public string[] Adds { get; set; }
         /// <summary>Levels that change more than settings ask for a second confirmation.</summary>
@@ -30,6 +34,8 @@ namespace Optimizzzer.Core
                 Level = Level.Quick,
                 Name = new Text("Rápido", "Quick"),
                 Tagline = new Text("Lo básico y seguro, en menos de un minuto.", "The safe basics, in under a minute."),
+                What = new Text("Quita anuncios, sugerencias y el envío de datos de uso. No toca nada que uses.", "Removes ads, suggestions and usage data reporting. Touches nothing you use."),
+                Example = new Text("Ejemplo: el menú Inicio deja de recomendarte apps para instalar.", "Example: Start stops recommending apps to install."),
                 Gains = new Text("Menos telemetría y menos procesos en segundo plano. Sin anuncios en Inicio, la pantalla de bloqueo ni el Explorador.",
                                  "Less telemetry and fewer background processes. No ads in Start, the lock screen or File Explorer."),
                 Duration = new Text("Menos de 1 minuto", "Under 1 minute"),
@@ -46,6 +52,8 @@ namespace Optimizzzer.Core
                 Level = Level.Balanced,
                 Name = new Text("Equilibrado", "Balanced"),
                 Tagline = new Text("Un escritorio más ágil y limpio para el día a día.", "A snappier, cleaner desktop for every day."),
+                What = new Text("Rápido, más un escritorio que responde al instante: sin animaciones ni efectos de transparencia y sin apps preinstaladas que nadie usa.", "Quick, plus a desktop that responds instantly: no animations or transparency effects, and no preinstalled apps nobody uses."),
+                Example = new Text("Ejemplo: al arrastrar una ventana ya no se dibuja su contenido, y los menús aparecen sin fundido.", "Example: dragging a window no longer redraws its contents, and menus appear without fading."),
                 Gains = new Text("Menús y ventanas que responden al instante, apps de inicio sin retraso y sin reinicios por sorpresa. Además quita apps preinstaladas que casi nadie usa.",
                                  "Menus and windows that respond instantly, startup apps with no delay, and no surprise restarts. Also removes preinstalled apps almost nobody uses."),
                 Duration = new Text("1 a 3 minutos", "1 to 3 minutes"),
@@ -61,7 +69,9 @@ namespace Optimizzzer.Core
             {
                 Level = Level.Gaming,
                 Name = new Text("Juegos", "Gaming"),
-                Tagline = new Text("Ajustes que influyen al jugar: latencia, grabación y ratón.", "Settings that matter while gaming: latency, recording and mouse."),
+                Tagline = new Text("Equilibrado, más todo lo que influye mientras juegas.", "Balanced, plus everything that matters while you play."),
+                What = new Text("Equilibrado, más ajustes para jugar: el ratón responde igual siempre, nada graba en segundo plano y el juego usa la gráfica potente.", "Balanced, plus gaming settings: the mouse always responds the same, nothing records in the background and games use the powerful graphics card."),
+                Example = new Text("Ejemplo: mover el ratón 5 cm gira la cámara lo mismo, lo muevas rápido o lento.", "Example: moving the mouse 5 cm turns the camera the same whether you move it fast or slow."),
                 Gains = new Text("Game Mode activo, sin grabación continua, puntería consistente y menos latencia en juegos en ventana. La ganancia de FPS depende del juego y del equipo, y se mide tras aplicar.",
                                  "Game Mode on, no continuous recording, consistent aim and lower latency in windowed games. The FPS gain depends on the game and the PC, and is measured after applying."),
                 Duration = new Text("1 a 3 minutos y reinicio", "1 to 3 minutes plus a restart"),
@@ -75,7 +85,9 @@ namespace Optimizzzer.Core
             {
                 Level = Level.Maximum,
                 Name = new Text("Máximo rendimiento", "Maximum performance"),
-                Tagline = new Text("Todo lo que tiene evidencia, aunque pierdas alguna función.", "Everything with evidence, even if you lose some features."),
+                Tagline = new Text("Juegos, más lo que más rinde aunque quite funciones.", "Gaming, plus what performs best even if it removes features."),
+                What = new Text("Incluye todo Juegos y suma lo que exprime el equipo a costa de funciones: el procesador nunca ahorra energía y se apagan el indexador y la hibernación.", "Includes all of Gaming and adds what squeezes the PC at the cost of features: the processor never saves power, and the indexer and hibernation are turned off."),
+                Example = new Text("Ejemplo: la búsqueda de archivos de Windows tarda más, porque deja de mantener un índice en segundo plano.", "Example: Windows file search takes longer, because it no longer keeps an index in the background."),
                 Gains = new Text("El procesador no entra en ahorro, no hay indexador ni apps de la Store en segundo plano, y se libera el espacio de la hibernación. Es lo máximo que se puede ajustar sin ajustes placebo.",
                                  "The processor never enters power saving, there is no indexer and no Store apps in the background, and the hibernation file is freed. This is as far as tuning goes without placebo tweaks."),
                 Duration = new Text("2 a 5 minutos y reinicio", "2 to 5 minutes plus a restart"),

@@ -46,6 +46,13 @@ namespace Optimizzzer.App.Shell
         public const string Help = "\uE897";
         public const string Export = "\uEDE1";
         public const string More = "\uE712";
+        public const string Processor = "\uE9F5";  // Processing
+        public const string Memory = "\uEEA0";     // Memory chip
+        public const string Disk = "\uEDA2";       // Hard drive
+        public const string Display = "\uE7F4";    // Monitor
+        public const string Board = "\uE950";      // Component
+        public const string Windows = "\uE770";    // System
+        public const string Web = "\uE774";        // Globe: search the internet
         public const string FullScreen = "\uE740";
         public const string BackToWindow = "\uE73F";
         public const string Menu = "\uE700";       // Collapse or expand the navigation menu

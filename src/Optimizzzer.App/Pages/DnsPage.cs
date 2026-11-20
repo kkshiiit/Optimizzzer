@@ -149,7 +149,7 @@ namespace Optimizzzer.App.Pages
                         "With Cloudflare, Google, Quad9 or AdGuard, Windows 11 can encrypt lookups so your internet provider cannot see them. Turn it on in Settings > Network & internet > your connection > DNS server assignment > Edit > DNS over HTTPS: On (automatic template)."), 12),
                     Ui.Secondary(Loc.S("Abrir Configuración de red", "Open network settings"), () =>
                     {
-                        try { System.Diagnostics.Process.Start("ms-settings:network-status"); } catch (Exception ex) { W.ShowError(ex.Message); }
+                        try { Launcher.Open("ms-settings:network-status"); } catch (Exception ex) { W.ShowError(ex.Message); }
                     }, Icons.Network)), 20);
                 doh.Margin = new Thickness(0, 16, 0, 0);
                 body.Children.Add(doh);

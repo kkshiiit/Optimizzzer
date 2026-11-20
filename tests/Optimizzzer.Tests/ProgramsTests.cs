@@ -200,3 +200,22 @@ namespace Optimizzzer.Tests
         }
     }
 }
+
+namespace Optimizzzer.Tests
+{
+    public class WebSearchTests
+    {
+        [Fact]
+        public void Each_browser_searches_with_its_own_engine()
+        {
+            var q = WebSearch.Query("aria2", true);
+            Assert.Equal("\"aria2\" qué es", q);
+            Assert.Equal("\"? \\\"aria2\\\" qué es\"", WebSearch.BrowserArgs(@"C:\Program Files\Google\Chrome\Application\chrome.exe", q));
+            Assert.Equal("-search \"\\\"aria2\\\" qué es\"", WebSearch.BrowserArgs(@"C:\Program Files\Mozilla Firefox\firefox.exe", q));
+            Assert.NotNull(WebSearch.BrowserArgs(@"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", q));
+            Assert.Null(WebSearch.BrowserArgs(@"C:\Tools\unknown.exe", q));
+            Assert.Equal("https://www.bing.com/search?q=%22aria2%22%20qu%C3%A9%20es", WebSearch.FallbackUrl(q));
+            Assert.Equal("\"a b\" what is", WebSearch.Query("a \"b\"".Replace("\"", "") is var x ? "a b" : x, false));
+        }
+    }
+}
