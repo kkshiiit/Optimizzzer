@@ -108,6 +108,20 @@ namespace Optimizzzer.Windows
         public StartMode? StartMode { get; set; }
         /// <summary>Services Windows cannot run without. The UI never lets these be changed.</summary>
         public bool Protected { get; set; }
+        /// <summary>The program the service runs, from the registry.</summary>
+        public string ImagePath { get; set; }
+        /// <summary>Installed by another program, not part of Windows (its program is outside the Windows folder).</summary>
+        public bool IsThirdParty
+        {
+            get
+            {
+                var exe = (Optimizzzer.Core.Tools.LeftoverScanner.ExecutableOf(ImagePath ?? "") ?? "").Replace("\\??\\", "");
+                if (exe.Length == 0) return false;
+                var win = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
+                return !exe.StartsWith(win, StringComparison.OrdinalIgnoreCase) && !exe.StartsWith("system32", StringComparison.OrdinalIgnoreCase)
+                    && !exe.StartsWith(@"\SystemRoot", StringComparison.OrdinalIgnoreCase);
+            }
+        }
     }
 
     public static class ServiceList
@@ -133,6 +147,7 @@ namespace Optimizzzer.Windows
                     {
                         var mode = svc.GetStartMode(sc.ServiceName);
                         var desc = new WinRegistry().GetValue(Hive.LocalMachine, @"SYSTEM\CurrentControlSet\Services\" + sc.ServiceName, "Description")?.Data as string;
+                        var image = new WinRegistry().GetValue(Hive.LocalMachine, @"SYSTEM\CurrentControlSet\Services\" + sc.ServiceName, "ImagePath")?.Data as string;
                         list.Add(new ServiceInfo
                         {
                             Name = sc.ServiceName,
@@ -141,6 +156,7 @@ namespace Optimizzzer.Windows
                             Running = sc.Status == ServiceControllerStatus.Running,
                             StartMode = mode,
                             Protected = Critical.Contains(sc.ServiceName) || mode == StartMode.Boot || mode == StartMode.System,
+                            ImagePath = image,
                         });
                     }
                     catch (Exception) { }

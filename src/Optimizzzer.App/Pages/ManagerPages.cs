@@ -18,7 +18,7 @@ namespace Optimizzzer.App.Pages
         public override string Key => "startup";
         public override string Title => Loc.S("Programas de inicio", "Startup programs");
         public override string Icon => Icons.Startup;
-        protected override string Intro => Loc.S("Programas que se abren solos al iniciar sesión. Desactivarlos no los desinstala; puedes volver a activarlos aquí o en el Administrador de tareas.",
+        protected override string Intro => Loc.S("Programas que se abren solos al iniciar sesión. Desactivarlos no los desinstala; puedes volver a activarlos aquí o en el Administrador de tareas. Algunos programas arrancan con una tarea programada: esos están en Tareas programadas, con el filtro de otros programas.",
             "Programs that open on their own when you sign in. Turning them off does not uninstall them; you can turn them back on here or in Task Manager.");
         protected override string SearchHint => Loc.S("Buscar programa", "Search program");
         protected override string EmptyText => Loc.S("No hay programas de inicio.", "There are no startup programs.");
@@ -43,7 +43,16 @@ namespace Optimizzzer.App.Pages
                 catch (Exception ex) { sw.IsChecked = !on; W.ShowError(ex.Message); }
             };
             var who = string.Join(" · ", new[] { i.Description, i.Publisher, i.ForAllUsers ? Loc.S("Todos los usuarios", "All users") : Loc.S("Solo tu usuario", "Your user only") }.Where(x => !string.IsNullOrEmpty(x)).Distinct());
-            var info = Ui.Stack(2, Ui.Text(i.Name, 14, true), Ui.Muted(who), Ui.Muted(i.Command, 12));
+            string origin;
+            switch (i.Source)
+            {
+                case StartupSource.UserRun: origin = Loc.S("Registro, solo tu usuario", "Registry, your user only"); break;
+                case StartupSource.MachineRun: origin = Loc.S("Registro, todos los usuarios", "Registry, all users"); break;
+                case StartupSource.MachineRun32: origin = Loc.S("Registro de 32 bits, todos los usuarios", "32-bit registry, all users"); break;
+                case StartupSource.UserFolder: origin = Loc.S("Carpeta Inicio, solo tu usuario", "Startup folder, your user only"); break;
+                default: origin = Loc.S("Carpeta Inicio, todos los usuarios", "Startup folder, all users"); break;
+            }
+            var info = Ui.Stack(2, Ui.Row(8, Ui.Text(i.Name, 14, true), Ui.Chip(Icons.Startup, Loc.S("Arranca desde: ", "Starts from: ") + origin)), Ui.Muted(who), Ui.Muted(i.Command, 12));
             var right = Ui.Row(12, state, sw);
             state.VerticalAlignment = VerticalAlignment.Center;
             return CleanupPage.Row(Ui.Icon(Icons.Startup, 16, "FgMuted"), info, right);
@@ -53,6 +62,10 @@ namespace Optimizzzer.App.Pages
     public sealed class ServicesPage : ListPage<ServiceInfo>
     {
         private bool _showProtected;
+        private enum Show { All, ThirdParty, Mine }
+        private Show _show = Show.All;
+        // Service name -> the open journal id of the start type I set by hand (for "Changed by me" and "Back to original").
+        private Dictionary<string, string> _mine = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
         public ServicesPage(AppState s, MainWindow w) : base(s, w) { }
         public override string Key => "services";
         public override string Title => Loc.S("Servicios", "Services");
@@ -60,22 +73,65 @@ namespace Optimizzzer.App.Pages
         protected override string Intro => Loc.S("Cambia cómo arranca cada servicio. Los servicios esenciales están bloqueados. Cada cambio queda en Historial y se puede deshacer.",
             "Change how each service starts. Essential services are locked. Every change is saved in History and can be undone.");
         protected override string SearchHint => Loc.S("Buscar servicio", "Search service");
-        protected override IList<ServiceInfo> Load() => ServiceList.Load(S.Win.Services);
-        protected override bool Matches(ServiceInfo i, string q) => Has(i.Name, q) || Has(i.DisplayName, q) || Has(i.Description, q);
-        protected override IEnumerable<ServiceInfo> Filtered(IEnumerable<ServiceInfo> items) => _showProtected ? items : items.Where(i => !i.Protected);
+        protected override IList<ServiceInfo> Load()
+        {
+            S.EnsureReadyAsync().GetAwaiter().GetResult();
+            _mine = S.Engine.History()
+                .Where(h => h.Entry.ResultKind == EntryResult.Applied && !h.Entry.Reverted && h.Entry.TweakId.StartsWith(ManualTweaks.ServicePrefix, StringComparison.Ordinal))
+                .GroupBy(h => h.Entry.TweakId.Split('|')[1], StringComparer.OrdinalIgnoreCase)
+                .ToDictionary(g => g.Key, g => g.First().Entry.TweakId, StringComparer.OrdinalIgnoreCase);
+            return ServiceList.Load(S.Win.Services);
+        }
+        protected override bool Matches(ServiceInfo i, string q) => Has(i.Name, q) || Has(i.DisplayName, q) || Has(i.Description, q) || Has(i.ImagePath, q);
+        protected override IEnumerable<ServiceInfo> Filtered(IEnumerable<ServiceInfo> items)
+        {
+            var shown = _showProtected ? items : items.Where(i => !i.Protected);
+            if (_show == Show.ThirdParty) shown = shown.Where(i => i.IsThirdParty);
+            if (_show == Show.Mine) shown = items.Where(i => _mine.ContainsKey(i.Name));
+            return shown;
+        }
 
         protected override FrameworkElement Toolbar()
         {
-            var cb = new CheckBox { Content = Loc.S("Mostrar también los esenciales (bloqueados)", "Also show essential ones (locked)"), IsChecked = _showProtected };
+            var seg = new StackPanel { Orientation = Orientation.Horizontal };
+            AutomationProperties.SetName(seg, Loc.S("Mostrar", "Show"));
+            foreach (var (v, label) in new[] { (Show.All, Loc.S("Todos", "All")), (Show.ThirdParty, Loc.S("De otros programas", "From other programs")), (Show.Mine, Loc.S("Cambiados por mí", "Changed by me") + " (" + _mine.Count + ")") })
+            {
+                var rb = new RadioButton { GroupName = "svcShow", Content = label, IsChecked = _show == v, Margin = new Thickness(0, 0, 4, 0) };
+                rb.SetResourceReference(FrameworkElement.StyleProperty, "Segment");
+                var val = v;
+                rb.Checked += (_, __) => { _show = val; W.RefreshCurrentIf(this); };
+                seg.Children.Add(rb);
+            }
+            var cb = new CheckBox { Content = Loc.S("Mostrar también los esenciales (bloqueados)", "Also show essential ones (locked)"), IsChecked = _showProtected, Margin = new Thickness(16, 0, 0, 0), VerticalAlignment = VerticalAlignment.Center };
             cb.Checked += (_, __) => { _showProtected = true; Refill(); };
             cb.Unchecked += (_, __) => { _showProtected = false; Refill(); };
-            return cb;
+            return _show == Show.Mine ? (FrameworkElement)seg : Ui.Row(0, seg, cb);
+        }
+
+        protected override Button PrimaryAction()
+        {
+            if (_show != Show.Mine || _mine.Count == 0) return null;
+            return Ui.Primary(Loc.S("Volver al inicio original de los ", "Restore the original start of the ") + _mine.Count + Loc.S(" servicios", " services"), async () =>
+            {
+                if (!await W.Confirm(Loc.S("¿Volver al original?", "Restore the originals?"),
+                    Loc.S("Cada servicio que cambiaste aquí vuelve al tipo de inicio que tenía antes, y se vuelve a iniciar si estaba en marcha.", "Every service you changed here goes back to the start type it had, and starts again if it was running."),
+                    Loc.S("Volver al original", "Restore originals"))) return;
+                var catalog = S.UndoCatalog();
+                var ids = _mine.Values.ToList();
+                var failed = await Task.Run(() => ids.Where(id => S.Engine.Undo(id, catalog).Failed.Count > 0).ToList());
+                if (failed.Count == 0) W.Toast(ToastKind.Success, Loc.S("Servicios devueltos a su inicio original.", "Services restored to their original start."));
+                else W.ShowError(string.Join(", ", failed), Loc.S("Algunos servicios no se pudieron devolver. Siguen en Historial para reintentarlo.", "Some services could not be restored. They stay in History to retry."));
+                _ = ReloadAsync();
+            }, Icons.Undo);
         }
 
         protected override FrameworkElement RowFor(ServiceInfo i)
         {
             var info = Ui.Stack(2,
-                Ui.Row(10, Ui.Text(i.DisplayName, 14, true), Ui.Text(i.Running ? Loc.S("En ejecución", "Running") : Loc.S("Detenido", "Stopped"), 12, false, i.Running ? "Success" : "FgMuted", wrap: false)),
+                Ui.Row(10, Ui.Text(i.DisplayName, 14, true), Ui.Text(i.Running ? Loc.S("En ejecución", "Running") : Loc.S("Detenido", "Stopped"), 12, false, i.Running ? "Success" : "FgMuted", wrap: false),
+                    _mine.ContainsKey(i.Name) ? Ui.Chip(Icons.History, Loc.S("Cambiado por ti", "Changed by you"), "AccentText") : null,
+                    i.IsThirdParty ? Ui.Chip(Icons.Apps, Loc.S("De otro programa", "From another program")) : null),
                 Ui.Clamped(i.Name + (string.IsNullOrEmpty(i.Description) ? "" : " · " + i.Description)));
             FrameworkElement right;
             if (i.Protected)
@@ -100,9 +156,11 @@ namespace Optimizzzer.App.Pages
                             Loc.S("Deshabilitar", "Disable"), danger: true))
                         { Refill(); return; }
                         // The row only changes when Windows accepted the new mode.
-                        if (await ApplyManual(ManualTweaks.Service(i.Name, i.DisplayName, mode)))
+                        var change = ManualTweaks.Service(i.Name, i.DisplayName, mode);
+                        if (await ApplyManual(change))
                         {
                             i.StartMode = mode;
+                            _mine[i.Name] = change.Id;
                             W.Toast(ToastKind.Success, i.DisplayName + ": " + ServiceStartAction.ModeName(mode, Loc.Lang));
                         }
                         Refill();
@@ -144,14 +202,54 @@ namespace Optimizzzer.App.Pages
 
         protected override FrameworkElement Toolbar()
         {
-            var cb = new CheckBox { Content = Loc.S("Mostrar también las de Windows", "Also show Windows tasks"), IsChecked = !_onlyMicrosoft };
+            var cb = new CheckBox { Content = Loc.S("Mostrar también las de Windows (si no, solo las de otros programas, como actualizadores)", "Also show Windows tasks (otherwise only other programs', such as updaters)"), IsChecked = !_onlyMicrosoft };
             cb.Checked += (_, __) => { _onlyMicrosoft = false; Refill(); };
             cb.Unchecked += (_, __) => { _onlyMicrosoft = true; Refill(); };
             return cb;
         }
 
+        private readonly HashSet<string> _picked = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        private Button _disableMany;
+
+        protected override Button PrimaryAction()
+        {
+            _disableMany = Ui.Primary("", async () =>
+            {
+                var paths = _picked.ToList();
+                if (!await W.Confirm(Loc.S("¿Desactivar ", "Disable ") + paths.Count + Loc.S(" tareas?", " tasks?"),
+                    Loc.S("No se borran: dejan de ejecutarse solas. Puedes volver a activarlas aquí o deshacerlo desde Historial.", "They are not deleted: they stop running on their own. You can turn them back on here or undo from History."),
+                    Loc.S("Desactivar", "Disable"))) return;
+                try
+                {
+                    await S.EnsureReadyAsync();
+                    var tweaks = paths.Select(p => ManualTweaks.Task(p, false)).ToList();
+                    var s = await Task.Run(() => S.Engine.Apply(tweaks, new ApplyOptions { CreateRestorePoint = false }));
+                    var bad = s.Entries.Where(e => e.ResultKind == EntryResult.Failed).ToList();
+                    if (bad.Count > 0) W.ShowError(string.Join("\n", bad.Select(e => e.TweakId + ": " + e.Error)));
+                    else W.Toast(ToastKind.Success, paths.Count + Loc.S(" tareas desactivadas.", " tasks disabled."));
+                }
+                catch (Exception ex) { W.ShowError(ex.Message); }
+                _picked.Clear();
+                _ = ReloadAsync();
+            }, Icons.Stop);
+            UpdateMany();
+            return _disableMany;
+        }
+
+        private void UpdateMany()
+        {
+            if (_disableMany == null) return;
+            _disableMany.Content = _picked.Count == 0 ? Loc.S("Marca tareas para desactivarlas juntas", "Tick tasks to disable them together") : Loc.S("Desactivar ", "Disable ") + _picked.Count + Loc.S(" tareas", " tasks");
+            _disableMany.IsEnabled = _picked.Count > 0;
+            AutomationProperties.SetName(_disableMany, _disableMany.Content.ToString());
+        }
+
         protected override FrameworkElement RowFor(ScheduledTaskInfo i)
         {
+            var pick = new CheckBox { IsChecked = _picked.Contains(i.Path), IsEnabled = i.Enabled, VerticalAlignment = VerticalAlignment.Top, ToolTip = Loc.S("Elegir para desactivar junto con otras", "Pick to disable together with others") };
+            AutomationProperties.SetName(pick, Loc.S("Elegir ", "Pick ") + i.Path);
+            pick.Checked += (_, __) => { _picked.Add(i.Path); UpdateMany(); };
+            pick.Unchecked += (_, __) => { _picked.Remove(i.Path); UpdateMany(); };
             var sw = new CheckBox { IsChecked = i.Enabled };
             sw.SetResourceReference(FrameworkElement.StyleProperty, "Switch");
             AutomationProperties.SetName(sw, i.Path);
@@ -171,7 +269,7 @@ namespace Optimizzzer.App.Pages
             var last = i.LastRun.HasValue ? Loc.S("Última ejecución: ", "Last run: ") + i.LastRun.Value.ToString("g") : Loc.S("Nunca se ha ejecutado", "Never run");
             var info = Ui.Stack(2, Ui.Text(i.Name, 14, true), Ui.Muted(i.Folder + " · " + last, 12),
                 string.IsNullOrWhiteSpace(i.Description) ? null : Ui.Clamped(i.Description));
-            return CleanupPage.Row(Ui.Icon(Icons.Tasks, 16, "FgMuted"), info, sw);
+            return CleanupPage.Row(pick, info, sw);
         }
     }
 
