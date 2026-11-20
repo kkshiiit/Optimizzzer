@@ -1,0 +1,148 @@
+name: build
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: 'Version to publish as a GitHub Release (for example v1.0.0). Leave empty to only build and test.'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  windows:
+    strategy:
+      fail-fast: false
+      matrix:
+        # windows-latest: Windows Server (same base as Windows 11 24H2).
+        # windows-11-arm: a real Windows 11 client, where System Restore exists.
+        os: [windows-latest, windows-11-arm]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+
+      - name: Unit tests (Core)
+        run: dotnet test tests/Optimizzzer.Tests -c Release
+
+      - name: Build Optimizzzer.exe
+        run: dotnet build src/Optimizzzer.App -c Release
+
+      - name: Self-test (every screen, screenshots, wizard apply and undo, every tool)
+        timeout-minutes: 12
+        shell: pwsh
+        env:
+          OPTIMIZZZER_SELFTEST_APPLY: '1'
+        run: |
+          $exe = Resolve-Path src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe
+          $p = Start-Process -FilePath $exe -ArgumentList '-SelfTest' -PassThru
+          $done = $p.WaitForExit(600000)
+          $log = Join-Path $env:TEMP 'optimizzzer-selftest.txt'
+          if (Test-Path $log) { Get-Content $log } else { Write-Host 'No self-test log was written' }
+          if (Test-Path "$env:TEMP\optimizzzer-shots") { Copy-Item "$env:TEMP\optimizzzer-shots" screenshots -Recurse }
+          if (-not $done) { Stop-Process -Id $p.Id -Force; throw 'Self-test did not finish' }
+          if ($p.ExitCode -ne 0) { throw "Self-test failed with exit code $($p.ExitCode)" }
+
+      - name: CLI dry run
+        timeout-minutes: 5
+        shell: pwsh
+        run: |
+          $exe = Resolve-Path src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe
+          $p = Start-Process -FilePath $exe -ArgumentList '-Profile','Gaming','-DryRun','-Lang','en' -PassThru -RedirectStandardOutput dry.txt
+          $done = $p.WaitForExit(240000)
+          Get-Content dry.txt
+          if (-not $done) { Stop-Process -Id $p.Id -Force; throw 'Dry run did not finish' }
+          if ($p.ExitCode -ne 0) { throw "Dry run failed with exit code $($p.ExitCode)" }
+
+      - name: Apply and undo on a real Windows (disposable runner)
+        timeout-minutes: 10
+        shell: pwsh
+        run: |
+          $exe = (Resolve-Path src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe).Path
+          (Get-CimInstance Win32_OperatingSystem) | Select-Object Caption, Version, OSArchitecture | Format-List | Out-String | Write-Host
+          function Invoke-Opt([string[]]$a, [string]$out) {
+            $p = Start-Process -FilePath $exe -ArgumentList $a -PassThru -RedirectStandardOutput $out
+            if (-not $p.WaitForExit(300000)) { Stop-Process -Id $p.Id -Force; throw "timeout: $a" }
+            return $p.ExitCode
+          }
+          $ids = 'privacy.telemetry,privacy.diagtrack,privacy.telemetryTasks,privacy.webSearch,perf.menuDelay,gaming.windowedOptimizations,gaming.gameDvr,power.fastStartup,update.stayOnVersion,svc.fax,ui.homeGallery,ui.fileExtensions,network.llmnr,svc.spooler,svc.maps,perf.searchIndex,power.ultimate,svc.xbox'
+          Invoke-Opt @('-Scan','-Lang','en') before.txt | Out-Null
+          $code = Invoke-Opt @('-Apply',$ids,'-Silent','-NoRestorePoint','-Lang','en') apply.txt
+          Get-Content apply.txt
+          if ($code -ne 0) { throw "apply exit code $code" }
+          Invoke-Opt @('-Scan','-Lang','en') applied.txt | Out-Null
+          $wanted = $ids.Split(',')
+          $notApplied = Get-Content applied.txt | Where-Object { $parts = -split $_; $parts.Count -ge 2 -and $wanted -contains $parts[1] -and $parts[0] -ne 'Applied' -and $parts[0] -ne 'NotApplicable' }
+          if ($notApplied) { $notApplied; throw 'Some tweaks did not report Applied after applying' }
+          $code = Invoke-Opt @('-Undo','all','-Lang','en') undo.txt
+          Get-Content undo.txt
+          if ($code -ne 0) { throw "undo exit code $code" }
+          Invoke-Opt @('-Scan','-Lang','en') after.txt | Out-Null
+          # Only the tweaks this test touched: Windows itself may flip unrelated settings (e.g. Storage Sense) meanwhile.
+          $mine = { param($f) Get-Content $f | Where-Object { $parts = -split $_; $parts.Count -ge 2 -and $wanted -contains $parts[1] } }
+          $diff = Compare-Object (& $mine before.txt) (& $mine after.txt)
+          if ($diff) { $diff | Format-Table -AutoSize | Out-String -Width 300; throw 'State after undo differs from the original' }
+          Write-Host "Apply and undo round trip OK for: $ids"
+
+      - uses: actions/upload-artifact@v4
+        if: matrix.os == 'windows-latest'
+        with:
+          name: Optimizzzer
+          path: src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: Screenshots-${{ matrix.os }}
+          path: screenshots
+
+      # Run manually (workflow_dispatch) to refresh the screenshots shown in the README.
+      - name: Commit README screenshots
+        if: github.event_name == 'workflow_dispatch' && success() && matrix.os == 'windows-latest'
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force docs/screenshots | Out-Null
+          $pick = 'Light-Es-page-wizard','Light-Es-wizard-step-Profile','Light-Es-wizard-step-Select','Light-Es-wizard-step-Review',
+                  'Light-Es-page-cleanup','Light-Es-page-dns','Light-Es-page-history',
+                  'Dark-En-page-wizard','Dark-En-wizard-step-Select','Dark-En-page-services','Dark-En-page-startup','Dark-En-page-repair'
+          foreach ($n in $pick) { if (Test-Path "screenshots/$n.png") { Copy-Item "screenshots/$n.png" "docs/screenshots/$n.png" -Force } }
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/screenshots
+          git diff --cached --quiet
+          if ($LASTEXITCODE -ne 0) {
+            git commit -m "Update README screenshots [skip ci]"
+            git push origin HEAD:${{ github.ref_name }}
+          }
+
+  # Publishes Optimizzzer.exe as a GitHub Release after every test above passed: either a pushed v* tag,
+  # or a manual run with release_tag set (the tag is then created on the tested commit).
+  release:
+    if: startsWith(github.ref, 'refs/tags/v') || (github.event_name == 'workflow_dispatch' && inputs.release_tag != '')
+    needs: windows
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 8.0.x
+      - name: Build Optimizzzer.exe
+        run: dotnet build src/Optimizzzer.App -c Release
+      - name: Publish release
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          Copy-Item src/Optimizzzer.App/bin/Release/net48/Optimizzzer.exe Optimizzzer.exe
+          $hash = (Get-FileHash Optimizzzer.exe -Algorithm SHA256).Hash
+          $notes = (Get-Content docs/RELEASE_NOTES.md -Raw) + "`n`nSHA-256 de Optimizzzer.exe: ``$hash``"
+          Set-Content notes.md $notes
+          $tag = if ("${{ inputs.release_tag }}") { "${{ inputs.release_tag }}" } else { "${{ github.ref_name }}" }
+          gh release create $tag Optimizzzer.exe --target "${{ github.sha }}" --title "Optimizzzer $tag" --notes-file notes.md

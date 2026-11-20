@@ -1,0 +1,40 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    The UI is built in C# (no compiled XAML) so the whole app builds with the plain .NET SDK on any OS.
+    Control templates live in Resources/Styles.xaml and are parsed at startup; -SelfTest checks them in CI.
+    Core and Windows sources are compiled into this exe so it ships as one file with no DLLs next to it.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>Optimizzzer.App</RootNamespace>
+    <AssemblyName>Optimizzzer</AssemblyName>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <PlatformTarget>AnyCPU</PlatformTarget>
+    <Prefer32Bit>false</Prefer32Bit>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <Version>1.0.1</Version>
+    <Product>Optimizzzer</Product>
+    <Description>Windows 10/11 optimizer</Description>
+    <Copyright>Optimizzzer contributors</Copyright>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+    <DebugType>embedded</DebugType>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\Optimizzzer.Core\**\*.cs" Exclude="..\Optimizzzer.Core\obj\**;..\Optimizzzer.Core\bin\**" LinkBase="Core" />
+    <Compile Include="..\Optimizzzer.Windows\**\*.cs" Exclude="..\Optimizzzer.Windows\obj\**;..\Optimizzzer.Windows\bin\**" LinkBase="Windows" />
+    <EmbeddedResource Include="Resources\Styles.xaml" LogicalName="Optimizzzer.Styles.xaml" />
+  </ItemGroup>
+  <ItemGroup>
+    <Reference Include="PresentationCore" />
+    <Reference Include="PresentationFramework" />
+    <Reference Include="WindowsBase" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="System.Management" />
+    <Reference Include="System.ServiceProcess" />
+    <Reference Include="Microsoft.CSharp" />
+    <Reference Include="System.Web.Extensions" />
+    <Reference Include="System.Runtime.Serialization" />
+  </ItemGroup>
+</Project>
