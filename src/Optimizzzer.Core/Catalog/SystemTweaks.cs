@@ -220,7 +220,12 @@ namespace Optimizzzer.Core.Catalog
                         c.Process.Run("taskkill", "/f /im OneDrive.exe", 15000);
                         var setup = OneDriveSetupPath();
                         if (setup == null) throw new InvalidOperationException("OneDriveSetup.exe not found");
-                        c.Process.Run(setup, "/uninstall", 300000);
+                        var r = c.Process.Run(setup, "/uninstall", 300000);
+                        if (!r.Ok)
+                            throw new InvalidOperationException("OneDriveSetup.exe /uninstall exit code " + r.ExitCode + ": " + (r.Error.Length > 0 ? r.Error : r.Output).Trim());
+                        // The uninstaller can finish removing files a moment after it exits.
+                        for (int i = 0; i < 30 && OneDriveInstalled(); i++) System.Threading.Thread.Sleep(500);
+                        if (OneDriveInstalled()) throw new InvalidOperationException("OneDrive is still installed after OneDriveSetup.exe /uninstall");
                     },
                 });
         }

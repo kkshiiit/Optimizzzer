@@ -182,3 +182,64 @@ namespace Optimizzzer.Tests
         }
     }
 }
+
+namespace Optimizzzer.Tests
+{
+    /// <summary>Changes the registry, then fails: the kind of half-done action that must be rolled back.</summary>
+    internal sealed class HalfDoneAction : TweakAction
+    {
+        public override ActionState Detect(SystemContext c) =>
+            c.Registry.GetValue(Hive.CurrentUser, @"Software\Test", "Half") == null ? ActionState.NotApplied : ActionState.Applied;
+        public override ActionSnapshot Snapshot(SystemContext c) => new ActionSnapshot { Kind = "half", Existed = false };
+        public override void Apply(SystemContext c)
+        {
+            c.Registry.SetValue(Hive.CurrentUser, @"Software\Test", "Half", RegValue.DWord(1));
+            throw new InvalidOperationException("second step failed");
+        }
+        public override void Revert(SystemContext c, ActionSnapshot s) => c.Registry.DeleteValue(Hive.CurrentUser, @"Software\Test", "Half");
+        public override string Describe(Lang l) => "half";
+    }
+
+    public class ReviewFixTests
+    {
+        [Fact]
+        public void An_action_that_fails_halfway_is_rolled_back_too()
+        {
+            var sys = new FakeSystem();
+            var engine = new TweakEngine(sys.Context, new MemoryJournalStore());
+            var t = new Tweak { Id = "test.half", Title = Text.Empty };
+            t.Actions.Add(new RegistryValueAction(Hive.CurrentUser, @"Software\Test", "First", RegValue.DWord(1)));
+            t.Actions.Add(new HalfDoneAction());
+
+            var s = engine.Apply(new[] { t }, new ApplyOptions());
+
+            Assert.Equal(EntryResult.Failed, s.Entries[0].ResultKind);
+            Assert.Null(sys.Registry.GetValue(Hive.CurrentUser, @"Software\Test", "Half"));
+            Assert.Null(sys.Registry.GetValue(Hive.CurrentUser, @"Software\Test", "First"));
+        }
+
+        [Fact]
+        public void A_failed_undo_stays_open_and_can_be_retried()
+        {
+            var sys = new FakeSystem();
+            var store = new MemoryJournalStore();
+            var engine = new TweakEngine(sys.Context, store);
+            var t = TweakCatalog.Find("ui.fileExtensions");
+            var catalog = TweakCatalog.All.ToList();
+            // Undo must write the original value back, so the simulated denial is hit.
+            sys.Registry.SetValue(Hive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "HideFileExt", RegValue.DWord(1));
+            var session = engine.Apply(new[] { t }, new ApplyOptions());
+
+            sys.Registry.FailOnSet = (h, p, n) => n == "HideFileExt";
+            var first = engine.UndoSession(session.Id, catalog);
+            Assert.Single(first.Failed);
+            Assert.Contains(engine.History(), h => h.Entry.TweakId == t.Id && !h.Entry.Reverted);
+
+            sys.Registry.FailOnSet = null;
+            var retry = engine.Undo(t.Id, catalog);
+            Assert.Single(retry.Reverted);
+            Assert.DoesNotContain(engine.History(), h => h.Entry.TweakId == t.Id && !h.Entry.Reverted);
+            Assert.Equal(1u, (uint)sys.Registry.GetValue(Hive.CurrentUser, @"Software\Microsoft\Windows\CurrentVersion\Explorer\Advanced", "HideFileExt").Data);
+        }
+    }
+}
