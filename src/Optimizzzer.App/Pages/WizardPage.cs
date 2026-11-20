@@ -407,16 +407,16 @@ namespace Optimizzzer.App.Pages
                 (Loc.S("Exportar la selección…", "Export the selection…"), Icons.Export, ExportSelection),
                 (Loc.S("Importar una selección…", "Import a selection…"), Icons.Import, ImportSelection));
             var toolbar = new Grid { Margin = new Thickness(0, 0, 0, 12) };
-            toolbar.ColumnDefinitions.Add(new ColumnDefinition { MaxWidth = 320 });
+            // The search box takes whatever the filter and the menu leave free.
+            toolbar.ColumnDefinitions.Add(new ColumnDefinition { MinWidth = 180 });
             toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
-            toolbar.ColumnDefinitions.Add(new ColumnDefinition());
             toolbar.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             toolbar.Children.Add(search);
             hideNa.VerticalAlignment = VerticalAlignment.Center;
             Grid.SetColumn(hideNa, 1);
             toolbar.Children.Add(hideNa);
             more.Margin = new Thickness(8, 0, 0, 0);
-            Grid.SetColumn(more, 3);
+            Grid.SetColumn(more, 2);
             toolbar.Children.Add(more);
 
             var main = new Grid();
