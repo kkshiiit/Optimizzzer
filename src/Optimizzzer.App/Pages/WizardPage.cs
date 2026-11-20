@@ -31,7 +31,7 @@ namespace Optimizzzer.App.Pages
         }
 
         public override string Key => "wizard";
-        public override string Title => Loc.S("Asistente de optimización", "Optimization wizard");
+        public override string Title => Loc.S("Personalizar", "Customize");
         public override string Icon => Icons.Wizard;
 
         private void GoTo(Step step)
@@ -648,7 +648,7 @@ namespace Optimizzzer.App.Pages
             }
 
             _applyUi = (update, log);
-            return StepFrame(_level != null ? Loc.S("Aplicando el nivel ", "Applying level ") + Loc.S(_level.Name) : Loc.S("Aplicando cambios", "Applying changes"),
+            return StepFrame(_level != null ? Loc.S("Aplicando el nivel " + _level.Name.Es, "Applying the " + _level.Name.En + " level") : Loc.S("Aplicando cambios", "Applying changes"),
                 Loc.S("No apagues el equipo. Cada cambio que falle se revierte solo.", "Do not turn off the PC. Any change that fails is rolled back automatically."),
                 Ui.Stack(0, loading, log), Footer(stop, null));
         }
@@ -739,7 +739,7 @@ namespace Optimizzzer.App.Pages
             mark.Margin = new Thickness(0, 0, 0, 12);
             mark.Loaded += (_, __) => Theme.Pop(mark);
             string heading = failed == 0
-                ? (_level != null ? Loc.S("Nivel ", "Level ") + Loc.S(_level.Name) + Loc.S(" aplicado", " applied") : Loc.S("Listo", "Done"))
+                ? (_level != null ? Loc.S("Nivel " + _level.Name.Es + " aplicado", _level.Name.En + " level applied") : Loc.S("Listo", "Done"))
                 : Loc.S("Terminado con avisos", "Finished with warnings");
             return StepFrame(heading, null, Ui.Stack(0, mark, summary, actions, measures), footer);
         }

@@ -143,20 +143,21 @@ namespace Optimizzzer.App.Pages
             AutomationProperties.SetName(steps, Loc.S("Nivel ", "Level ") + (int)l.Level + Loc.S(" de 4", " of 4"));
 
             var progress = new ProgressBar { Minimum = 0, Maximum = Math.Max(1, total), Value = 0, Margin = new Thickness(0, 6, 0, 0) };
+            progress.SetResourceReference(Control.BackgroundProperty, "Divider"); // the card is SurfaceAlt, so the track needs its own tone
             Theme.AnimateValue(progress, applied);
             var status = pending.Count == 0
                 ? Ui.Text(Loc.S("Todo aplicado", "All applied"), 12, true, "Success", wrap: false)
                 : Ui.Text(pending.Count + (pending.Count == 1 ? Loc.S(" cambio pendiente", " change left") : Loc.S(" cambios pendientes", " changes left")), 12, true, "AccentText", wrap: false);
             var done = Ui.Muted(applied + Loc.S(" de ", " of ") + total + Loc.S(" ya aplicados en este equipo", " already applied on this PC"), 12);
 
-            var title = Ui.Row(10, Ui.Icon(Icons.For(l.Level), 20, "AccentText"), Ui.Text(Loc.S(l.Name), 16, true, "Fg", wrap: false));
+            var title = Ui.Row(10, Ui.Icon(Icons.For(l.Level), 20, "AccentText"), Ui.Text(Loc.S(l.Name), 16, true, "Fg"));
             var content = Ui.Stack(0, steps, title, Ui.Muted(Loc.S(l.Tagline)), status, progress, done,
                 l.NeedsSecondConfirmation ? Ui.Text(Loc.S("Incluye cambios moderados: lee qué pierdes.", "Includes moderate changes: read what you lose."), 12, false, "Moderate") : null);
             ((FrameworkElement)content.Children[2]).Margin = new Thickness(0, 4, 0, 12);
 
             var b = new Button { Content = content, HorizontalContentAlignment = HorizontalAlignment.Stretch, VerticalContentAlignment = VerticalAlignment.Top };
             b.SetResourceReference(FrameworkElement.StyleProperty, "CardButton");
-            b.Width = 236;
+            b.Width = 300; // two per row on a 1024 px window, so titles such as "Maximum performance" fit
             b.Margin = new Thickness(0, 0, 12, 12);
             AutomationProperties.SetName(b, Loc.S(l.Name) + ". " + Loc.S(l.Tagline) + " " + status.Text);
             b.Click += (_, __) => OpenLevel(l.Level);
@@ -190,8 +191,11 @@ namespace Optimizzzer.App.Pages
                 losses.Count > 0 ? Ui.Notice(Icons.Warning, "Moderate", Loc.S("Qué pierdes: ", "What you lose: ")
                     + string.Join(" ", losses.Take(3).Select(t => Loc.S(t.Downside)))
                     + (losses.Count > 3 ? Loc.S(" Y ", " Plus ") + (losses.Count - 3) + Loc.S(" más en el detalle.", " more in the details.") : "")) : null,
-                uninstalls > 0 ? Ui.Notice(Icons.Error, "Advanced", uninstalls + Loc.S(" son desinstalaciones de apps preinstaladas: no se deshacen desde aquí, se reinstalan desde la Microsoft Store.",
-                    " are uninstalls of preinstalled apps: they are not undone from here, you reinstall them from the Microsoft Store.")) : null,
+                uninstalls > 0 ? Ui.Notice(Icons.Error, "Advanced", uninstalls == 1
+                    ? Loc.S("1 es una desinstalación de una app preinstalada: no se deshace desde aquí, se reinstala desde la Microsoft Store.",
+                        "1 is an uninstall of a preinstalled app: it is not undone from here, you reinstall it from the Microsoft Store.")
+                    : uninstalls + Loc.S(" son desinstalaciones de apps preinstaladas: no se deshacen desde aquí, se reinstalan desde la Microsoft Store.",
+                        " are uninstalls of preinstalled apps: they are not undone from here, you reinstall them from the Microsoft Store.")) : null,
                 restart != RestartKind.None ? Ui.Notice(Icons.Restart, "FgMuted", Names.Of(restart) + ". " + Loc.S("Duración: ", "Duration: ") + Loc.S(l.Duration) + ".")
                     : Ui.Notice(Icons.Stopwatch, "FgMuted", Loc.S("Duración: ", "Duration: ") + Loc.S(l.Duration) + "."));
 
@@ -240,9 +244,9 @@ namespace Optimizzzer.App.Pages
             var buttons = Ui.Row(8, cancel, apply);
             buttons.HorizontalAlignment = HorizontalAlignment.Right;
 
-            var head = Ui.Row(12, Ui.Icon(Icons.For(level), 28, "AccentText"), Ui.Stack(0, Ui.H2(Loc.S("Nivel ", "Level ") + Loc.S(l.Name)), Ui.Muted(Loc.S(l.Tagline))));
+            var head = Ui.Row(12, Ui.Icon(Icons.For(level), 28, "AccentText"), Ui.Stack(0, Ui.H2(Loc.S("Nivel " + l.Name.Es, l.Name.En + " level")), Ui.Muted(Loc.S(l.Tagline))));
             var sheet = MainWindow.Card(Ui.Stack(16, head, Ui.Text(Loc.S("Qué va a pasar", "What will happen"), 14, true), what, rp, Ui.Stack(4, toggle, detailsHost), buttons));
-            AutomationProperties.SetName(sheet, Loc.S("Nivel ", "Level ") + Loc.S(l.Name));
+            AutomationProperties.SetName(sheet, Loc.S("Nivel " + l.Name.Es, l.Name.En + " level"));
             W.ShowOverlay(sheet, W.CloseOverlay, 640);
             Dispatcher(() => apply.Focus());
         }

@@ -2,12 +2,12 @@
 
 Optimizador para Windows 10 y 11. Es un único `Optimizzzer.exe` de unos 500 KB que no instala nada: funciona con .NET Framework 4.8, que ya viene con Windows 10 (1903 o posterior) y con Windows 11.
 
-![Asistente: análisis](docs/screenshots/Light-Es-page-wizard.png)
+![Inicio: niveles en 1 clic](docs/screenshots/Light-Es-page-home.png)
 
-| Selección por categorías | Revisión antes de aplicar |
+| Qué va a pasar, antes de aplicar | Resultado |
 |---|---|
-| ![Selección](docs/screenshots/Light-Es-wizard-step-Select.png) | ![Revisión](docs/screenshots/Light-Es-wizard-step-Review.png) |
-| ![Tema oscuro](docs/screenshots/Dark-En-wizard-step-Select.png) | ![Limpieza](docs/screenshots/Light-Es-page-cleanup.png) |
+| ![Hoja del nivel Máximo](docs/screenshots/Light-Es-level-sheet-Maximum.png) | ![Resultado](docs/screenshots/Light-Es-level-result.png) |
+| ![Selección ajuste por ajuste](docs/screenshots/Light-Es-wizard-step-Select.png) | ![Tema oscuro](docs/screenshots/Dark-En-page-home.png) |
 
 Las capturas se generan solas en un Windows de GitHub.
 
@@ -29,7 +29,7 @@ Cada nivel incluye los anteriores. Al elegirlo ves en lenguaje simple qué va a 
 - **Apariencia:** tema claro/oscuro con 5 colores de acento.
 - **Modo ligero automático:** en equipos modestos se quitan las animaciones y las sombras para que vaya fluido.
 
-**Asistente paso a paso**
+**Personalizar (paso a paso)**
 1. Análisis: lee tu equipo y el estado real de cada ajuste. Solo lee.
 2. Perfil: Mínimo seguro, Trabajo y estudio, Juegos, Portátil y batería o Privacidad máxima. Te recomienda uno según tu hardware.
 3. Selección: 107 ajustes en 10 categorías, con buscador. Cada uno se puede desplegar para ver por qué, qué pierdes, qué cambia exactamente (clave de registro, servicio o tarea) y la fuente.
@@ -54,7 +54,7 @@ No aplica ajustes placebo ni peligrosos. La lista y los motivos están en [docs/
 
 ## Descargar
 
-Descarga `Optimizzzer.exe` desde la sección **Releases** del repositorio (versión actual: v1.0.1). Las notas de cada versión incluyen el hash SHA-256 del ejecutable para comprobar que no se ha modificado.
+Descarga `Optimizzzer.exe` desde la sección **Releases** del repositorio (versión actual: v1.1.0). Las notas de cada versión incluyen el hash SHA-256 del ejecutable para comprobar que no se ha modificado.
 
 Windows SmartScreen avisará al abrirlo porque el exe no está firmado. Pulsa "Más información" y luego "Ejecutar de todas formas".
 
@@ -83,7 +83,7 @@ Optimizzzer.exe -Undo all
 
 Cada cambio de código se verifica automáticamente en dos Windows reales de GitHub: **Windows 11 Enterprise** (cliente, 10.0.26200) y **Windows Server 2025** (misma base que Windows 11 24H2):
 
-- 27 tests del núcleo, entre ellos "aplicar todo y deshacer deja el estado idéntico".
+- 52 tests del núcleo, entre ellos "aplicar todo y deshacer deja el estado idéntico".
 - Interfaz: primer análisis como en un arranque normal, todas las pantallas en tema claro y oscuro, en español e inglés, y aplicar y deshacer desde el asistente. Se guardan capturas en `docs/screenshots/`.
 - Herramientas:
   - Punto de restauración creado y comprobado en la lista de Windows 11.
@@ -97,7 +97,7 @@ Cada cambio de código se verifica automáticamente en dos Windows reales de Git
 GitHub ya no ofrece máquinas con Windows 10, así que Windows 10 no se prueba automáticamente. Si lo usas en Windows 10, haz antes una pasada en una máquina virtual:
 
 1. Abre la app y completa el análisis.
-2. Aplica el perfil Mínimo seguro.
+2. Aplica el nivel Rápido desde Inicio.
 3. Comprueba en Historial que aparecen los cambios.
 4. Pulsa "Deshacer toda la sesión" y verifica que el estado vuelve a ser el de antes con un nuevo análisis.
 5. Prueba Limpieza, Red y DNS (y "Volver a mi DNS anterior").
