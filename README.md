@@ -9,7 +9,6 @@ Optimizador para Windows 10 y 11. Es un único `Optimizzzer.exe` de unos 500 KB 
 | ![Hoja del nivel Máximo](docs/screenshots/Light-Es-level-sheet-Maximum.png) | ![Resultado](docs/screenshots/Light-Es-level-result.png) |
 | ![Selección ajuste por ajuste](docs/screenshots/Light-Es-wizard-step-Select.png) | ![Tema oscuro](docs/screenshots/Dark-Es-page-home.png) |
 
-Las capturas se generan solas en un Windows de GitHub.
 
 ## Qué hace
 
